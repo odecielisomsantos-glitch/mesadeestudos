@@ -2,34 +2,32 @@ import streamlit as st
 import json
 import os
 import base64
-from datetime import datetime
+import pandas as pd
+import plotly.express as px
+from datetime import datetime, timedelta
 
-# --- 1. CONFIGURAÇÃO E ESTILO (CSS) ---
-st.set_page_config(page_title="Plataforma de Leitura Pro", layout="wide")
+# --- 1. CONFIGURAÇÃO E ESTILO ---
+st.set_page_config(page_title="Plataforma de Estudos Pro", layout="wide")
 
 st.markdown("""
     <style>
-    /* Pasta Principal: Grande e Negrito */
-    .stExpander details summary p {
-        font-size: 26px !important;
-        font-weight: 800 !important;
-        text-align: left !important;
-        color: #1E1E1E !important;
+    .stExpander details summary p { font-size: 26px !important; font-weight: 800 !important; text-align: left !important; }
+    .card-revisao {
+        background-color: #E3F2FD;
+        border-left: 5px solid #2196F3;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 5px;
+        font-size: 14px;
+        font-weight: bold;
+        color: #0D47A1;
     }
-    /* Subtópico: Um pouco menor, mas ainda em destaque */
-    .stExpander .stExpander details summary p {
-        font-size: 20px !important;
-        font-weight: 700 !important;
-        color: #4F4F4F !important;
-    }
-    .caixa-leitura {
-        background-color: #FFFFFF;
-        padding: 30px;
-        border-radius: 10px;
+    .dia-calendario {
         border: 1px solid #E0E0E0;
-        font-size: 20px;
-        line-height: 1.6;
-        text-align: justify;
+        border-radius: 10px;
+        padding: 10px;
+        min-height: 150px;
+        background-color: #F8F9FA;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -42,16 +40,16 @@ def carregar():
         try:
             with open(DB_FILE, "r") as f: return json.load(f)
         except: return {}
-    return {}
+    return {"pastas": {}, "calendario": []}
 
 def salvar(dados):
     with open(DB_FILE, "w") as f: json.dump(dados, f, indent=4)
 
-def exibir_pdf(base64_pdf):
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>'
-    st.markdown(pdf_display, unsafe_allow_html=True)
-
-if "db" not in st.session_state: st.session_state.db = carregar()
+if "db" not in st.session_state: 
+    data = carregar()
+    # Garantir estrutura nova
+    if "pastas" not in data: data = {"pastas": data, "calendario": []}
+    st.session_state.db = data
 
 # --- 3. MENU LATERAL ---
 st.sidebar.title("🎮 Menu Principal")
@@ -59,116 +57,120 @@ menu = st.sidebar.radio("Ir para:", ["📖 PDF (Leitura)", "🔄 Revisão Ativa"
 
 # --- 4. PÁGINA: GERENCIAMENTO ---
 if menu == "⚙️ Gerenciamento":
-    st.title("⚙️ Gerenciamento de Conteúdo")
+    st.title("⚙️ Gerenciamento")
     t1, t2, t3, t4 = st.tabs(["📁 Pastas", "📂 Subpastas", "📝 Material", "✏️ Editar/Excluir"])
+    db_p = st.session_state.db["pastas"]
     
     with t1:
         n_p = st.text_input("Nome da Nova Pasta")
         if st.button("Criar Pasta"):
             if n_p:
-                st.session_state.db[n_p] = {}
-                salvar(st.session_state.db); st.success(f"Pasta '{n_p}' criada!"); st.rerun()
+                db_p[n_p] = {}
+                salvar(st.session_state.db); st.success("Criada!"); st.rerun()
 
     with t2:
-        p_s = st.selectbox("Na Pasta:", [""] + list(st.session_state.db.keys()))
-        n_s = st.text_input("Nome da Nova Subpasta (Assunto)")
+        p_s = st.selectbox("Na Pasta:", [""] + list(db_p.keys()))
+        n_s = st.text_input("Nome da Subpasta")
         if st.button("Vincular Subpasta"):
             if p_s and n_s:
-                st.session_state.db[p_s][n_s] = {"texto": "", "pdf": "", "contagem": 0, "ultima_data": ""}
-                salvar(st.session_state.db); st.success("Subpasta vinculada!"); st.rerun()
+                db_p[p_s][n_s] = {"texto": "", "pdf": "", "contagem": 0, "ultima_data": ""}
+                salvar(st.session_state.db); st.success("Vinculada!"); st.rerun()
 
     with t3:
-        p_c = st.selectbox("Pasta:", [""] + list(st.session_state.db.keys()), key="m1")
+        p_c = st.selectbox("Pasta:", [""] + list(db_p.keys()), key="m1")
         if p_c:
-            s_c = st.selectbox("Subpasta:", [""] + list(st.session_state.db[p_c].keys()), key="m2")
+            s_c = st.selectbox("Subpasta:", [""] + list(db_p[p_c].keys()), key="m2")
             if s_c:
-                st.write("---")
-                txt_input = st.text_area("Texto do material:", height=150, value=st.session_state.db[p_c][s_c].get("texto", ""))
-                pdf_input = st.file_uploader("Subir arquivo PDF (Opcional)", type="pdf")
-                
-                if st.button("💾 Salvar Material Completo"):
-                    st.session_state.db[p_c][s_c]["texto"] = txt_input
-                    if pdf_input:
-                        b64 = base64.b64encode(pdf_input.read()).decode('utf-8')
-                        st.session_state.db[p_c][s_c]["pdf"] = b64
-                    salvar(st.session_state.db); st.success("Material salvo!"); st.rerun()
+                txt_i = st.text_area("Texto:", height=150, value=db_p[p_c][s_c].get("texto", ""))
+                pdf_i = st.file_uploader("PDF", type="pdf")
+                if st.button("💾 Salvar Material"):
+                    db_p[p_c][s_c]["texto"] = txt_i
+                    if pdf_i: db_p[p_c][s_c]["pdf"] = base64.b64encode(pdf_i.read()).decode('utf-8')
+                    salvar(st.session_state.db); st.success("Salvo!"); st.rerun()
 
     with t4:
-        st.subheader("Modificar Estrutura")
-        ed_p = st.selectbox("Selecionar Pasta:", [""] + list(st.session_state.db.keys()))
-        if ed_p:
-            novo_n_p = st.text_input("Novo nome Pasta:", value=ed_p)
-            col1, col2 = st.columns(2)
-            if col1.button("Renomear"):
-                st.session_state.db[novo_n_p] = st.session_state.db.pop(ed_p)
-                salvar(st.session_state.db); st.rerun()
-            if col2.button("🗑️ Deletar"):
-                del st.session_state.db[ed_p]; salvar(st.session_state.db); st.rerun()
+        ed_p = st.selectbox("Editar Pasta:", [""] + list(db_p.keys()))
+        if ed_p and st.button("🗑️ Deletar Pasta"):
+            del db_p[ed_p]; salvar(st.session_state.db); st.rerun()
 
-# --- 5. PÁGINA: REVISÃO ATIVA ---
+# --- 5. PÁGINA: REVISÃO ATIVA (QUADRO E GRÁFICOS) ---
 elif menu == "🔄 Revisão Ativa":
-    st.title("🔄 Controle de Revisões")
-    st.write("Aqui estão os assuntos organizados pela urgência de leitura.")
+    st.title("🔄 Quadro Estratégico de Revisão")
+    db_p = st.session_state.db["pastas"]
     
-    revisoes = []
-    for p, sub_dict in st.session_state.db.items():
-        for s, d in sub_dict.items():
-            u_data = d.get("ultima_data", "")
-            if u_data:
-                dias = (datetime.now() - datetime.strptime(u_data, "%Y-%m-%d %H:%M:%S")).days
-                revisoes.append({"assunto": s, "pasta": p, "dias": dias, "status": f"🚩 Há {dias} dias"})
-            else:
-                revisoes.append({"assunto": s, "pasta": p, "dias": 999, "status": "⚪ Nunca lido"})
+    # --- DASHBOARD DE MÉTRICAS ---
+    col_g1, col_g2 = st.columns([1, 1])
     
-    # Ordenar pelos mais antigos (mais dias)
-    revisoes = sorted(revisoes, key=lambda x: x['dias'], reverse=True)
+    rev, n_rev, s_mat = 0, 0, 0
+    for p, subs in db_p.items():
+        for s, d in subs.items():
+            if not d.get("texto") and not d.get("pdf"): s_mat += 1
+            elif d.get("contagem", 0) > 0: rev += 1
+            else: n_rev += 1
+
+    with col_g1:
+        st.subheader("📊 Status dos Assuntos")
+        fig = px.pie(values=[rev, n_rev, s_mat], 
+                     names=['Revisados', 'Não Revisados', 'Sem Material'],
+                     color_discrete_sequence=['#4CAF50', '#FFC107', '#F44336'],
+                     hole=0.4)
+        fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=250)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col_g2:
+        st.subheader("📌 Planejar Revisão")
+        # Criar tarefa de revisão
+        todas_sub = []
+        for p, subs in db_p.items():
+            for s in subs.keys(): todas_sub.append(f"{s} ({p})")
+        
+        assunto_plan = st.selectbox("Escolha o Assunto:", todas_sub)
+        data_plan = st.date_input("Para qual dia?", datetime.now())
+        if st.button("📍 Agendar no Quadro"):
+            st.session_state.db["calendario"].append({"assunto": assunto_plan, "data": str(data_plan)})
+            salvar(st.session_state.db); st.success("Agendado!"); st.rerun()
+
+    st.divider()
     
-    if revisoes:
-        for r in revisoes:
+    # --- QUADRO ESTILO CALENDÁRIO (Próximos 7 Dias) ---
+    st.subheader("📅 Planejamento Semanal")
+    cols_dias = st.columns(7)
+    hoje = datetime.now().date()
+    
+    for i, col in enumerate(cols_dias):
+        dia_foco = hoje + timedelta(days=i)
+        with col:
+            st.markdown(f"**{dia_foco.strftime('%d/%m')}**")
+            st.markdown(f"*{dia_foco.strftime('%a')}*")
+            
             with st.container(border=True):
-                c1, c2 = st.columns([3, 1])
-                c1.markdown(f"**{r['assunto']}** ({r['pasta']})")
-                c2.info(r['status'])
-    else:
-        st.info("Nenhum assunto cadastrado para revisão.")
+                # Filtrar tarefas do dia
+                tarefas = [t for t in st.session_state.db["calendario"] if t["data"] == str(dia_foco)]
+                if tarefas:
+                    for t in tarefas:
+                        st.markdown(f'<div class="card-revisao">{t["assunto"]}</div>', unsafe_allow_html=True)
+                else:
+                    st.write("---")
+
+    if st.button("🧹 Limpar Quadro Completo"):
+        st.session_state.db["calendario"] = []
+        salvar(st.session_state.db); st.rerun()
 
 # --- 6. PÁGINA: PDF (LEITURA) ---
 else:
     st.title("📖 Área de Leitura")
-    
-    for pasta, subpastas in st.session_state.db.items():
-        # PASTA PRINCIPAL
+    db_p = st.session_state.db["pastas"]
+    for pasta, subpastas in db_p.items():
         with st.expander(f"📁 {pasta.upper()}", expanded=False):
-            if not subpastas:
-                st.write("Nenhum assunto nesta pasta.")
-            
             for sub, dados in subpastas.items():
-                # SUBTÓPICO (Abertura com a mesma interação)
                 with st.expander(f"📄 {sub}"):
-                    # Informações de leitura no topo do conteúdo
-                    st.write(f"📊 **Leituras realizadas:** {dados.get('contagem', 0)}x")
-                    
-                    # 1. Parte do Texto
+                    st.write(f"📊 **Leituras:** {dados.get('contagem', 0)}x")
                     if dados.get("texto"):
-                        st.markdown(f'<div class="caixa-leitura">{dados["texto"].replace("\n", "<br>")}</div>', unsafe_allow_html=True)
-                    
-                    # 2. Parte do PDF
+                        st.markdown(f'<div style="background:white; padding:20px; border-radius:10px; border:1px solid #ddd; font-size:18px;">{dados["texto"].replace("\n", "<br>")}</div>', unsafe_allow_html=True)
                     if dados.get("pdf"):
-                        st.divider()
-                        st.write("📂 **Documento PDF Anexado:**")
-                        # Botão de download (garantia de acesso)
-                        st.download_button(f"📥 Baixar PDF: {sub}", base64.b64decode(dados["pdf"]), f"{sub}.pdf", key=f"dl_{pasta}_{sub}")
-                        # Tentativa de visualização
-                        exibir_pdf(dados["pdf"])
+                        st.download_button(f"📥 Baixar PDF: {sub}", base64.b64decode(dados["pdf"]), f"{sub}.pdf", key=f"dl_{sub}")
                     
-                    if not dados.get("texto") and not dados.get("pdf"):
-                        st.warning("Assunto sem conteúdo. Adicione no Gerenciamento.")
-
-                    # Botão de Conclusão dentro do expander
-                    st.write("")
-                    if st.button("✅ MARCAR LEITURA CONCLUÍDA", key=f"done_{pasta}_{sub}", use_container_width=True):
-                        st.session_state.db[pasta][sub]["contagem"] = dados.get("contagem", 0) + 1
-                        st.session_state.db[pasta][sub]["ultima_data"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        salvar(st.session_state.db)
-                        st.balloons()
-                        st.rerun()
+                    if st.button("✅ CONCLUÍR", key=f"d_{sub}", use_container_width=True):
+                        db_p[pasta][sub]["contagem"] = dados.get("contagem", 0) + 1
+                        db_p[pasta][sub]["ultima_data"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        salvar(st.session_state.db); st.balloons(); st.rerun()
