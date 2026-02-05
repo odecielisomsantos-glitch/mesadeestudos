@@ -2,134 +2,128 @@ import streamlit as st
 import json
 import os
 
-# --- CONFIGURAÇÃO E CSS PARA ESTILIZAÇÃO ---
+# --- 1. CONFIGURAÇÃO E ESTILO (CSS) ---
 st.set_page_config(page_title="Plataforma de Leitura", layout="wide")
 
-# CSS para tornar as barras profissionais, texto à esquerda, negrito e maior
 st.markdown("""
     <style>
-    .stExpander {
-        border: 1px solid #d3d3d3 !important;
-        border-radius: 5px !important;
-        margin-bottom: 10px !important;
-    }
-    .stExpander p {
-        font-size: 22px !important;
-        font-weight: bold !important;
-        color: #31333F !important;
+    /* Estilo das Pastas (Expanders) */
+    .stExpander details summary p {
+        font-size: 26px !important;
+        font-weight: 800 !important;
         text-align: left !important;
+        color: #1E1E1E !important;
     }
-    .subpasta-bar {
-        background-color: #f0f2f6;
-        padding: 15px;
-        border-radius: 5px;
-        margin-bottom: 5px;
-        cursor: pointer;
-        font-weight: bold;
-        display: flex;
-        justify-content: space-between;
-    }
-    .texto-leitura {
-        background-color: white;
+    /* Estilo do Bloco de Leitura */
+    .caixa-leitura {
+        background-color: #FFFFFF;
         padding: 40px;
-        border-radius: 10px;
+        border-radius: 12px;
+        border: 1px solid #E0E0E0;
+        font-size: 22px;
         line-height: 1.8;
-        font-size: 20px;
         text-align: justify;
-        border: 1px solid #e6e9ef;
+        color: #262730;
+        margin-top: 20px;
+    }
+    /* Estilo das Subpastas (Botões) */
+    div.stButton > button {
+        text-align: left !important;
+        font-weight: bold !important;
+        font-size: 18px !important;
+        height: 50px !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-DB_FILE = "dados_leitura_v3.json"
+# --- 2. GESTÃO DE DADOS ---
+DB_FILE = "dados_estudos.json"
 
-def carregar_dados():
+def carregar():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r") as f: return json.load(f)
     return {}
 
-def salvar_dados(dados):
+def salvar(dados):
     with open(DB_FILE, "w") as f: json.dump(dados, f, indent=4)
 
-if "db" not in st.session_state: st.session_state.db = carregar_dados()
+if "db" not in st.session_state: st.session_state.db = carregar()
+if "leitura_atual" not in st.session_state: st.session_state.leitura_atual = None
 
-# --- BARRA LATERAL ---
+# --- 3. MENU LATERAL ---
 st.sidebar.title("🎮 Painel")
 menu = st.sidebar.radio("Ir para:", ["PDF (Leitura)", "Gerenciamento"])
 
-# --- PÁGINA: GERENCIAMENTO ---
+# --- 4. PÁGINA: GERENCIAMENTO ---
 if menu == "Gerenciamento":
-    st.title("⚙️ Gerenciamento de Conteúdo")
-    tab1, tab2, tab3 = st.tabs(["📁 Criar Pasta", "📂 Criar Subpasta", "📝 Adicionar Texto"])
+    st.title("⚙️ Gerenciamento")
+    t1, t2, t3 = st.tabs(["📁 Criar Pasta", "📂 Criar Subpasta", "📝 Texto"])
     
-    with tab1:
-        n_pasta = st.text_input("Nome da Matéria (Pasta Principal)")
-        if st.button("Salvar Pasta"):
-            if n_pasta:
-                st.session_state.db[n_pasta] = {}
-                salvar_dados(st.session_state.db)
-                st.success(f"✅ Pasta '{n_pasta}' criada!")
-                st.rerun()
+    with t1:
+        n_p = st.text_input("Nome da Pasta")
+        if st.button("Criar"):
+            if n_p:
+                st.session_state.db[n_p] = {}
+                salvar(st.session_state.db); st.success("Feito!"); st.rerun()
 
-    with tab2:
-        p_sel = st.selectbox("Na Pasta:", list(st.session_state.db.keys()))
-        n_sub = st.text_input("Nome do Assunto (Subpasta)")
-        if st.button("Salvar Subpasta"):
-            if n_sub:
-                st.session_state.db[p_sel][n_sub] = {"texto": "", "contagem": 0}
-                salvar_dados(st.session_state.db)
-                st.success("✅ Subpasta vinculada!")
-                st.rerun()
+    with t2:
+        p_s = st.selectbox("Na Pasta:", list(st.session_state.db.keys()))
+        n_s = st.text_input("Nome da Subpasta")
+        if st.button("Vincular"):
+            if n_s:
+                # Criamos com campos padrão para evitar erros
+                st.session_state.db[p_s][n_s] = {"texto": "", "contagem": 0}
+                salvar(st.session_state.db); st.success("Vinculado!"); st.rerun()
 
-    with tab3:
-        p_sel2 = st.selectbox("Pasta:", list(st.session_state.db.keys()), key="tx_p")
-        s_sel2 = st.selectbox("Subpasta:", list(st.session_state.db.get(p_sel2, {}).keys()), key="tx_s")
-        txt = st.text_area("Texto para Leitura:", height=300)
-        if st.button("Atualizar Texto"):
-            st.session_state.db[p_sel2][s_sel2]["texto"] = txt
-            salvar_dados(st.session_state.db)
-            st.success("✅ Material pronto para estudo!")
+    with t3:
+        p_c = st.selectbox("Pasta:", list(st.session_state.db.keys()), key="c1")
+        s_c = st.selectbox("Subpasta:", list(st.session_state.db.get(p_c, {}).keys()), key="c2")
+        txt = st.text_area("Conteúdo:", height=250)
+        if st.button("Salvar Texto"):
+            st.session_state.db[p_c][s_c]["texto"] = txt
+            salvar(st.session_state.db); st.success("Texto Salvo!"); st.rerun()
 
-# --- PÁGINA: PDF (LEITURA) ---
-elif menu == "PDF (Leitura)":
+# --- 5. PÁGINA: PDF (LEITURA) ---
+else:
     st.title("📖 Área de Leitura")
     
-    if not st.session_state.db:
-        st.info("Acesse o Gerenciamento para criar suas primeiras pastas.")
-    
+    # Exibição das Pastas e Subpastas
     for pasta, subpastas in st.session_state.db.items():
-        # A "Pasta" agora é um expander estilizado (Texto à esquerda e Negrito via CSS)
-        with st.expander(f"📁 {pasta.upper()}"):
+        with st.expander(f"📁 {pasta.upper()}", expanded=False):
             if not subpastas:
-                st.write("Nenhum assunto cadastrado.")
+                st.write("Vazio. Adicione subpastas no Gerenciamento.")
             
             for sub, dados in subpastas.items():
-                col_sub, col_count = st.columns([4, 1])
+                col_btn, col_info = st.columns([4, 1])
                 
-                with col_sub:
-                    # Botão que simula a abertura da subpasta
+                # Tratamento de erro: se 'contagem' não existir na pasta antiga, ele usa 0
+                qtd = dados.get("contagem", 0)
+                
+                with col_btn:
                     if st.button(f"📄 {sub}", key=f"btn_{pasta}_{sub}", use_container_width=True):
-                        st.session_state.visualizando = (pasta, sub)
-                
-                with col_count:
-                    st.markdown(f"**Lido: {dados['contagem']}x**")
+                        st.session_state.leitura_atual = (pasta, sub)
+                        st.rerun()
+                with col_info:
+                    st.markdown(f"**Lido: {qtd}x**")
 
-    # Área de Exibição do Texto (Abre abaixo de tudo ao selecionar)
-    if "visualizando" in st.session_state:
-        p, s = st.session_state.visualizando
-        st.divider()
-        st.subheader(f"📍 Lendo agora: {s}")
+    # Área de Leitura (Sempre abre abaixo quando uma subpasta é clicada)
+    if st.session_state.leitura_atual:
+        p_ativa, s_ativa = st.session_state.leitura_atual
+        conteudo_puro = st.session_state.db[p_ativa][s_ativa].get("texto", "")
         
-        texto_exibir = st.session_state.db[p][s]["texto"]
-        if texto_exibir:
-            st.markdown(f'<div class="texto-leitura">{texto_exibir.replace("\n", "<br>")}</div>', unsafe_allow_html=True)
-            
-            st.write("")
-            if st.button("✅ LEITURA CONCLUÍDA!", use_container_width=True):
-                st.session_state.db[p][s]["contagem"] += 1
-                salvar_dados(st.session_state.db)
-                st.balloons()
-                st.success(f"Parabéns! Você completou {st.session_state.db[p][s]['contagem']} leituras deste tópico.")
-                st.rerun()
+        st.divider()
+        st.subheader(f"📍 Lendo: {s_ativa}")
+        
+        # Mostra o texto ou um aviso se estiver vazio
+        if conteudo_puro:
+            st.markdown(f'<div class="caixa-leitura">{conteudo_puro.replace("\n", "<br>")}</div>', unsafe_allow_html=True)
         else:
-            st.warning("Texto não encontrado. Adicione o conteúdo no Gerenciamento.")
+            st.warning("Esta subpasta ainda não possui texto. Adicione no Gerenciamento.")
+
+        # Botão de Conclusão
+        if st.button("✅ LEITURA CONCLUÍDA!", use_container_width=True):
+            # Incrementa a contagem de forma segura
+            st.session_state.db[p_ativa][s_ativa]["contagem"] = st.session_state.db[p_ativa][s_ativa].get("contagem", 0) + 1
+            salvar(st.session_state.db)
+            st.balloons()
+            st.rerun()
