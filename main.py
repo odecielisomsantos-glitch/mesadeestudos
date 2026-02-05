@@ -5,6 +5,7 @@ import base64
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
+from streamlit_quill import st_quill  # Importando o novo editor
 
 # --- 1. CONFIGURAÇÃO E ESTILO (CSS) ---
 st.set_page_config(page_title="Mesa de Estudos VIP", layout="wide")
@@ -14,13 +15,24 @@ st.markdown("""
     /* Pastas e Títulos */
     .stExpander details summary p { font-size: 26px !important; font-weight: 800 !important; text-align: left !important; color: #1E1E1E !important; }
     
-    /* Cores dos Grifos */
-    mark.amarelo { background-color: #FFF176; color: black; padding: 2px 4px; border-radius: 3px; font-weight: bold; }
-    mark.verde { background-color: #A5D6A7; color: black; padding: 2px 4px; border-radius: 3px; font-weight: bold; }
-    mark.rosa { background-color: #F48FB1; color: black; padding: 2px 4px; border-radius: 3px; font-weight: bold; }
-    
-    /* Estilo do Texto de Leitura */
-    .caixa-leitura { background-color: #FFFFFF; padding: 35px; border-radius: 15px; border: 1px solid #E0E0E0; font-size: 22px; line-height: 1.8; text-align: justify; color: #262730; }
+    /* Estilo do Editor de Texto (Quill) para parecer leitura */
+    .stQuill {
+        background-color: #FFFFFF;
+        border-radius: 15px;
+        border: 1px solid #E0E0E0;
+        font-size: 20px; /* Fonte ligeiramente menor para o editor */
+        line-height: 1.8;
+        text-align: justify;
+        color: #262730;
+    }
+    .ql-container.ql-snow { border: none !important; }
+    .ql-toolbar.ql-snow {
+        border: none !important;
+        border-bottom: 1px solid #E0E0E0 !important;
+        background-color: #f8f9fa;
+        border-radius: 15px 15px 0 0;
+    }
+    .ql-editor { padding: 35px !important; }
 
     /* Cards do Calendário */
     .card-revisao-pendente { background-color: #FFF9C4; border-left: 5px solid #FBC02D; padding: 8px; border-radius: 5px; margin-bottom: 5px; font-size: 13px; font-weight: bold; color: #827717; }
@@ -50,7 +62,7 @@ if "db" not in st.session_state: st.session_state.db = carregar()
 st.sidebar.title("🎮 Menu Principal")
 menu = st.sidebar.radio("Ir para:", ["📖 Leitura de Materiais", "📊 Revisão e Quadro", "⚙️ Gerenciamento"])
 
-# --- 4. PÁGINA: GERENCIAMENTO (ESTILO ANTIGO) ---
+# --- 4. PÁGINA: GERENCIAMENTO ---
 if menu == "⚙️ Gerenciamento":
     st.title("⚙️ Gerenciamento de Conteúdo")
     t1, t2, t3, t4 = st.tabs(["📁 Criar Pasta", "📂 Criar Subpasta", "📝 Adicionar Material", "✏️ Editar/Excluir"])
@@ -75,7 +87,8 @@ if menu == "⚙️ Gerenciamento":
         p_c = st.selectbox("Pasta:", [""] + list(db_p.keys()), key="g1")
         s_c = st.selectbox("Subpasta:", [""] + list(db_p[p_c].keys()) if p_c else [], key="g2")
         if s_c:
-            txt_in = st.text_area("Texto do material (Cole o texto bruto aqui):", height=250, value=db_p[p_c][s_c].get("texto", ""))
+            st.info("💡 Dica: Cole o texto puro aqui. Você poderá grifá-lo na área de leitura.")
+            txt_in = st.text_area("Texto do material:", height=250, value=db_p[p_c][s_c].get("texto", ""))
             pdf_in = st.file_uploader("Subir arquivo PDF", type="pdf")
             if st.button("💾 Salvar Material"):
                 db_p[p_c][s_c]["texto"] = txt_in
@@ -137,7 +150,7 @@ elif menu == "📊 Revisão e Quadro":
                             t["concluido"] = True
                             salvar(st.session_state.db); st.rerun()
 
-# --- 6. PÁGINA: LEITURA (COM CANETINHA) ---
+# --- 6. PÁGINA: LEITURA (COM GRIFO INTERATIVO) ---
 else:
     st.title("📖 Área de Leitura")
     db_p = st.session_state.db["pastas"]
@@ -146,30 +159,44 @@ else:
         with st.expander(f"📁 {pasta.upper()}", expanded=False):
             for sub, dados in subpastas.items():
                 with st.expander(f"📄 {sub}"):
-                    # --- FERRAMENTA DE MARCA TEXTO ---
-                    st.write("🖍️ **Modo Canetinha Ativado**")
-                    cor_grifo = st.segmented_control("Cor do Marca Texto:", ["Amarelo", "Verde", "Rosa"], default="Amarelo")
-                    
+                    # --- EDITOR DE TEXTO COM GRIFOS ---
                     texto_atual = dados.get("texto", "")
                     
-                    # Painel de Edição Rápida (Para grifar na hora da leitura)
-                    novo_texto = st.text_area("Edite ou aplique grifos (Ex: use <mark class='amarelo'>texto</mark>)", 
-                                             value=texto_atual, height=300, key=f"edit_{sub}")
-                    
-                    if st.button("💾 Salvar Grifos", key=f"sv_{sub}"):
-                        db_p[pasta][sub]["texto"] = novo_texto
-                        salvar(st.session_state.db); st.success("Grifos salvos!"); st.rerun()
+                    if texto_atual:
+                        # Barra de ferramentas minimalista: só cor de fundo e limpar formatação
+                        toolbar_config = [
+                            [{'background': ['#FFF176', '#A5D6A7', '#F48FB1', 'white']}], # Amarelo, Verde, Rosa
+                            ['clean'] # Borracha para limpar
+                        ]
+                        
+                        st.caption("🖍️ **Modo de Estudo:** Selecione o texto e escolha uma cor na barra acima para grifar.")
+                        # O componente st_quill substitui a caixa de texto estática
+                        novo_conteudo_html = st_quill(
+                            value=texto_atual,
+                            toolbar=toolbar_config,
+                            key=f"quill_{pasta}_{sub}",
+                            html=True, # Salva como HTML para manter os grifos
+                            readonly=False # Permite edição/grifo
+                        )
+                        
+                        # Botão para salvar os grifos feitos
+                        if st.button("💾 Salvar Marcações no Texto", key=f"sv_{sub}"):
+                            db_p[pasta][sub]["texto"] = novo_conteudo_html
+                            salvar(st.session_state.db)
+                            st.success("Grifos salvos com sucesso!")
+                            st.rerun()
+                    else:
+                        st.info("Este assunto ainda não possui texto para leitura.")
 
-                    st.divider()
-                    
-                    # Exibição Final com Grifos
-                    st.markdown(f'<div class="caixa-leitura">{novo_texto.replace("\n", "<br>")}</div>', unsafe_allow_html=True)
-                    
+                    # --- ÁREA DO PDF ---
                     if dados.get("pdf"):
                         st.divider()
+                        st.write("📂 **Documento PDF Anexado:**")
                         st.download_button(f"📥 Baixar PDF Original: {sub}", base64.b64decode(dados["pdf"]), f"{sub}.pdf", key=f"dl_{sub}")
                         st.markdown(f'<iframe src="data:application/pdf;base64,{dados["pdf"]}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
 
+                    st.divider()
+                    # Botão de Conclusão
                     if st.button("✅ CONCLUÍR LEITURA", key=f"fin_{sub}", use_container_width=True):
                         db_p[pasta][sub]["contagem"] = dados.get("contagem", 0) + 1
                         salvar(st.session_state.db); st.balloons(); st.rerun()
