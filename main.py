@@ -6,186 +6,229 @@ import pandas as pd
 import plotly.express as px
 import time
 import io
-from datetime import datetime, timedelta
+from datetime import datetime
 from streamlit_quill import st_quill
+
+# Tentativa de importação segura
 try:
     from PyPDF2 import PdfReader
 except ImportError:
-    st.error("Erro: A biblioteca PyPDF2 não foi instalada. Crie um arquivo 'requirements.txt' no GitHub com 'PyPDF2' escrito dentro.")
+    pass
 
-# --- 1. CONFIGURAÇÃO ---
-st.set_page_config(page_title="Mesa de Estudos VIP", layout="wide", page_icon="🚀")
+# --- CONFIGURAÇÃO DA PÁGINA ---
+st.set_page_config(page_title="Mesa de Estudos VIP", layout="wide", page_icon="📚")
 
+# --- ESTILIZAÇÃO CSS (Inspirado na imagem de módulos) ---
 st.markdown("""
     <style>
-    .stExpander details summary p { font-size: 20px !important; font-weight: 700 !important; }
+    /* Estilo do Menu de Módulos (Sidebar-like dentro da página) */
+    .module-item {
+        padding: 10px 15px;
+        border-radius: 5px;
+        margin-bottom: 5px;
+        background-color: #f0f2f6;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        transition: 0.3s;
+    }
+    .module-item:hover { background-color: #e0e4ea; }
+    .module-active { background-color: #633bbc !important; color: white !important; }
+    .lock-icon { margin-left: auto; font-size: 14px; opacity: 0.6; }
+    
+    /* Cards de Estudo */
     .anki-card {
-        background-color: #f8f9fa;
-        border: 2px solid #4A90E2;
+        background-color: white;
+        border: 2px solid #633bbc;
         border-radius: 15px;
-        padding: 30px;
+        padding: 40px;
         text-align: center;
-        min-height: 200px;
+        min-height: 250px;
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: 22px;
-        box-shadow: 2px 2px 12px rgba(0,0,0,0.1);
-        margin-bottom: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
-    .folder-box {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 10px;
-        border: 1px solid #e0e0e0;
-        text-align: center;
-        transition: 0.3s;
-    }
-    .folder-box:hover { border-color: #4A90E2; background-color: #f0f7ff; }
+    
+    /* Meta Progress Bar */
+    .stProgress > div > div > div > div { background-color: #633bbc; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. GESTÃO DE DADOS ---
+# --- GESTÃO DE DADOS ---
 DB_FILE = "dados_estudos.json"
 
-def carregar():
+def carregar_dados():
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r") as f:
                 data = json.load(f)
-                # Garante que as chaves novas existam para evitar erros de 'KeyError'
-                if "pastas" not in data: data = {"pastas": data}
-                for pasta in data["pastas"]:
-                    for sub in data["pastas"][pasta]:
-                        if "cards" not in data["pastas"][pasta][sub]: data["pastas"][pasta][sub]["cards"] = []
-                        if "simulado" not in data["pastas"][pasta][sub]: data["pastas"][pasta][sub]["simulado"] = []
+                if "indices" not in data: 
+                    data["indices"] = {"acertos": 0, "erros": 0, "revisoes": 0, "cards_feitos": 0, "meta_percent": 80}
                 return data
-        except: return {"pastas": {}}
-    return {"pastas": {}}
+        except: return {"pastas": {}, "indices": {}}
+    return {"pastas": {}, "indices": {"acertos": 0, "erros": 0, "revisoes": 0, "cards_feitos": 0, "meta_percent": 80}}
 
-def salvar(dados):
+def salvar_dados(dados):
     with open(DB_FILE, "w") as f: json.dump(dados, f, indent=4)
 
-if "db" not in st.session_state: st.session_state.db = carregar()
+if "db" not in st.session_state: st.session_state.db = carregar_dados()
 
-# --- 3. BARRA LATERAL ---
+# --- BARRA LATERAL ---
 st.sidebar.title("🎮 Painel de Controle")
-menu = st.sidebar.radio("Navegação:", ["📖 Leitura Ativa", "🧠 Revisão & Simulado", "⚙️ Gerenciamento"])
+menu = st.sidebar.radio("Navegação:", ["📖 Leitura Ativa", "🧠 Revisão & Simulado", "📈 Índices", "⚙️ Gerenciamento"])
 
-# --- 4. PÁGINA: REVISÃO & SIMULADO (A ESTANTE) ---
+# --- PÁGINA: REVISÃO & SIMULADO (ESTRUTURA DE MÓDULOS) ---
 if menu == "🧠 Revisão & Simulado":
-    st.title("🧠 Minha Estante de Estudos")
+    st.title("🧠 Meus Módulos de Estudo")
     db_p = st.session_state.db["pastas"]
     
     if not db_p:
-        st.info("Sua estante está vazia. Vá em Gerenciamento para criar pastas e materiais.")
+        st.info("Crie pastas e subpastas no Gerenciamento para começar.")
+    else:
+        col_menu, col_conteudo = st.columns([1, 2.5])
+        
+        with col_menu:
+            st.subheader("📁 Disciplinas")
+            for pasta in db_p.keys():
+                with st.expander(f"▼ {pasta.upper()}", expanded=True):
+                    for sub in db_p[pasta].keys():
+                        # Botão que simula o item da imagem enviada
+                        if st.button(f"📄 {sub}", key=f"nav_{pasta}_{sub}", use_container_width=True):
+                            st.session_state.current_sub = (pasta, sub)
+                            st.session_state.modo_estudo = None
+
+        with col_conteudo:
+            if "current_sub" in st.session_state:
+                p, s = st.session_state.current_sub
+                st.subheader(f"Módulo: {s}")
+                
+                c1, c2 = st.columns(2)
+                if c1.button("📝 Iniciar Simulado", use_container_width=True): st.session_state.modo_estudo = "Simulado"
+                if c2.button("🗂️ Revisar Cards", use_container_width=True): st.session_state.modo_estudo = "Cards"
+                
+                st.divider()
+                
+                modo = st.session_state.get("modo_estudo")
+                material = db_p[p][s]
+                
+                if modo == "Cards":
+                    if not material["cards"]: st.warning("Sem cards gerados. Vá em Gerenciamento.")
+                    else:
+                        card = material["cards"][0] # Exemplo simplificado
+                        st.markdown(f'<div class="anki-card">{card["frente"]}</div>', unsafe_allow_html=True)
+                        if st.button("Revelar Resposta"):
+                            st.info(card["verso"])
+                            st.session_state.db["indices"]["cards_feitos"] += 1
+                            salvar_dados(st.session_state.db)
+
+                elif modo == "Simulado":
+                    if not material["simulado"]: st.warning("Sem simulado gerado.")
+                    else:
+                        for idx, q in enumerate(material["simulado"]):
+                            st.markdown(f"**Questão {idx+1}:** {q['pergunta']}")
+                            resp = st.radio("Sua resposta:", q['opcoes'], key=f"q_{idx}")
+                            if st.button("Confirmar", key=f"btn_{idx}"):
+                                if resp == q['correta']:
+                                    st.success("Acertou!")
+                                    st.session_state.db["indices"]["acertos"] += 1
+                                else:
+                                    st.error("Errou!")
+                                    st.session_state.db["indices"]["erros"] += 1
+                                salvar_dados(st.session_state.db)
+            else:
+                st.info("Selecione um assunto no menu ao lado para estudar.")
+
+# --- PÁGINA: ÍNDICES (DASHBOARD) ---
+elif menu == "📈 Índices":
+    st.title("📈 Meus Índices de Performance")
+    ind = st.session_state.db["indices"]
     
-    # Lista de Pastas (Estilo plataforma)
-    for pasta, subpastas in db_p.items():
-        with st.expander(f"📁 {pasta.upper()}", expanded=True):
-            cols = st.columns(len(subpastas) if subpastas else 1)
-            for i, (sub, dados) in enumerate(subpastas.items()):
-                with cols[i % len(cols)]:
-                    st.markdown(f"**{sub}**")
-                    tipo = st.radio(f"Modo {sub}:", ["Cards", "Simulado"], key=f"mode_{sub}")
-                    
-                    if st.button(f"Iniciar {tipo}", key=f"btn_{sub}"):
-                        st.session_state.estudando = {"pasta": pasta, "sub": sub, "tipo": tipo}
-
-    # Área de Estudo Ativa
-    if "estudando" in st.session_state:
-        st.divider()
-        estudo = st.session_state.estudando
-        conteudo = db_p[estudo["pasta"]][estudo["sub"]]
+    # Metas
+    col_meta1, col_meta2 = st.columns([2, 1])
+    with col_meta1:
+        st.subheader("🎯 Gerenciamento de Meta")
+        meta = st.slider("Defina sua meta de acerto (%)", 0, 100, ind["meta_percent"])
+        ind["meta_percent"] = meta
         
-        st.subheader(f"✍️ {estudo['tipo']}: {estudo['sub']}")
+        total_q = ind["acertos"] + ind["erros"]
+        perc_atual = (ind["acertos"] / total_q * 100) if total_q > 0 else 0
         
-        if estudo["tipo"] == "Cards":
-            if not conteudo["cards"]:
-                st.warning("Nenhum card gerado para este assunto.")
-            else:
-                # Lógica simples de navegação de cards
-                if "card_idx" not in st.session_state: st.session_state.card_idx = 0
-                idx = st.session_state.card_idx % len(conteudo["cards"])
-                card = conteudo["cards"][idx]
-                
-                if "mostrar_verso" not in st.session_state: st.session_state.mostrar_verso = False
-                
-                st.markdown(f'<div class="anki-card">{card["verso"] if st.session_state.mostrar_verso else card["frente"]}</div>', unsafe_allow_html=True)
-                
-                c1, c2, c3 = st.columns(3)
-                if c1.button("🔄 Virar"): st.session_state.mostrar_verso = not st.session_state.mostrar_verso; st.rerun()
-                if c2.button("➡️ Próximo"): 
-                    st.session_state.card_idx += 1
-                    st.session_state.mostrar_verso = False
-                    st.rerun()
-                if c3.button("❌ Sair"): del st.session_state.estudando; st.rerun()
+        st.write(f"Desempenho Atual: **{perc_atual:.1f}%**")
+        st.progress(perc_atual / 100)
+    
+    with col_meta2:
+        if perc_atual >= meta: st.success("Meta Atingida! 🔥")
+        else: st.warning(f"Faltam {(meta - perc_atual):.1f}% para a meta.")
 
-        else: # Simulado
-            if not conteudo["simulado"]:
-                st.warning("Nenhum simulado disponível.")
-            else:
-                for item in conteudo["simulado"]:
-                    st.info(item["pergunta"])
-                    st.radio("Resposta:", item["opcoes"], key=f"sim_{item['pergunta']}")
-                if st.button("Finalizar Simulado"):
-                    st.balloons(); del st.session_state.estudando; st.rerun()
+    st.divider()
+    
+    # Cards de Métricas
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Questões Feitas", total_q)
+    c2.metric("Acertos", ind["acertos"], delta=f"{perc_atual:.1f}%")
+    c3.metric("Erros", ind["erros"], delta=f"-{100-perc_atual:.1f}%", delta_color="inverse")
+    c4.metric("Cards Revisados", ind["cards_feitos"])
+    
+    # Gráfico de Evolução (Exemplo)
+    st.subheader("📊 Histórico de Acertos")
+    dados_grafico = pd.DataFrame({
+        "Categoria": ["Acertos", "Erros"],
+        "Quantidade": [ind["acertos"], ind["erros"]]
+    })
+    fig = px.pie(dados_grafico, values='Quantidade', names='Categoria', color_discrete_map={'Acertos':'#28a745', 'Erros':'#dc3545'})
+    st.plotly_chart(fig)
 
-# --- 5. PÁGINA: GERENCIAMENTO (O CÉREBRO) ---
+# --- PÁGINA: GERENCIAMENTO ---
 elif menu == "⚙️ Gerenciamento":
-    st.title("⚙️ Centro de Produção")
-    t1, t2, t3 = st.tabs(["📁 Estrutura", "📄 Material & IA", "🗑️ Excluir"])
+    st.title("⚙️ Gerenciador de Conteúdo")
+    
+    t1, t2 = st.tabs(["📂 Estrutura de Pastas", "🤖 Upload & Geração IA"])
     
     with t1:
-        # Mesma lógica anterior de criar pastas e subpastas
-        col1, col2 = st.columns(2)
-        with col1:
-            nova_p = st.text_input("Nova Pasta (Ex: Direito Penal)")
-            if st.button("Criar"):
-                if nova_p: st.session_state.db["pastas"][nova_p] = {}; salvar(st.session_state.db); st.rerun()
-        with col2:
-            p_sel = st.selectbox("Pasta Pai:", [""] + list(st.session_state.db["pastas"].keys()))
-            nova_s = st.text_input("Nova Subpasta (Ex: Princípios)")
-            if st.button("Vincular"):
+        c1, c2 = st.columns(2)
+        with c1:
+            nova_p = st.text_input("Nome da Disciplina (Pasta)")
+            if st.button("Criar Disciplina"):
+                if nova_p: 
+                    st.session_state.db["pastas"][nova_p] = {}
+                    salvar_dados(st.session_state.db); st.rerun()
+        with c2:
+            p_sel = st.selectbox("Selecione a Disciplina:", [""] + list(st.session_state.db["pastas"].keys()))
+            nova_s = st.text_input("Nome do Assunto (Subpasta)")
+            if st.button("Criar Assunto"):
                 if p_sel and nova_s:
-                    st.session_state.db["pastas"][p_sel][nova_s] = {"texto": "", "pdf": "", "contagem": 0, "cards": [], "simulado": []}
-                    salvar(st.session_state.db); st.rerun()
+                    st.session_state.db["pastas"][p_sel][nova_s] = {"cards": [], "simulado": [], "pdf": ""}
+                    salvar_dados(st.session_state.db); st.rerun()
 
     with t2:
-        st.subheader("🤖 Gerador Inteligente")
-        p_at = st.selectbox("Selecione a Pasta:", [""] + list(st.session_state.db["pastas"].keys()), key="gen_p")
-        s_at = st.selectbox("Selecione a Subpasta:", list(st.session_state.db["pastas"][p_at].keys()) if p_at else [], key="gen_s")
+        st.write("Selecione onde o PDF será processado:")
+        p_up = st.selectbox("Pasta:", [""] + list(st.session_state.db["pastas"].keys()), key="p_up")
+        s_up = st.selectbox("Subpasta:", list(st.session_state.db["pastas"][p_up].keys()) if p_up else [], key="s_up")
         
-        if s_at:
-            pdf_file = st.file_uploader("Upload do PDF da Matéria", type="pdf")
-            banca = st.selectbox("Estilo da Banca:", ["AOCP", "CEBRASPE", "FGV"])
-            
-            if st.button("🚀 Gerar Material de Estudo (IA)"):
-                if pdf_file:
-                    # Aqui simulamos a extração e criação
-                    # Em um sistema real, aqui você processaria o PDF
-                    fake_card = {"frente": f"Conceito chave de {s_at} para a {banca}", "verso": "Explicação extraída do material."}
-                    fake_sim = {"pergunta": f"Sobre {s_at}, a {banca} afirma que:", "opcoes": ["Certo", "Errado"], "correta": "Certo"}
-                    
-                    st.session_state.db["pastas"][p_at][s_at]["cards"].append(fake_card)
-                    st.session_state.db["pastas"][p_at][s_at]["simulado"].append(fake_sim)
-                    
-                    # Salva o PDF também
-                    st.session_state.db["pastas"][p_at][s_at]["pdf"] = base64.b64encode(pdf_file.read()).decode('utf-8')
-                    
-                    salvar(st.session_state.db)
-                    st.success("Cards e Simulados gerados com sucesso!")
-                else:
-                    st.error("Faça o upload do PDF primeiro.")
+        pdf = st.file_uploader("Arraste o PDF da matéria aqui", type="pdf")
+        if st.button("✨ Gerar Cards e Simulado") and s_up and pdf:
+            with st.spinner("IA processando PDF para cards e questões..."):
+                # SIMULAÇÃO DE GERAÇÃO (Aqui você integraria a lógica de leitura real)
+                time.sleep(2)
+                
+                # Mock de Questões (Simulando banca CEBRASPE/AOCP)
+                q_gerada = {
+                    "pergunta": f"De acordo com o PDF de {s_up}, o item X é indispensável?",
+                    "opcoes": ["Certo", "Errado"],
+                    "correta": "Certo"
+                }
+                card_gerado = {
+                    "frente": f"O que o material diz sobre {s_up}?",
+                    "verso": "Diz que o conceito Y deve ser aplicado sempre."
+                }
+                
+                st.session_state.db["pastas"][p_up][s_up]["simulado"].append(q_gerada)
+                st.session_state.db["pastas"][p_up][s_up]["cards"].append(card_gerado)
+                salvar_dados(st.session_state.db)
+                st.success("Conteúdo integrado com sucesso!")
 
-    with t3:
-        # Lógica de exclusão para manter o banco limpo
-        ex_p = st.selectbox("Excluir Pasta:", [""] + list(st.session_state.db["pastas"].keys()), key="del_p")
-        if ex_p and st.button("Confirmar Exclusão Permanente"):
-            del st.session_state.db["pastas"][ex_p]
-            salvar(st.session_state.db); st.rerun()
-
-# --- MANTENDO LEITURA ATIVA ---
 elif menu == "📖 Leitura Ativa":
     st.title("📖 Área de Leitura")
-    # ... (seu código original de leitura)
+    st.info("Aqui você acessa os textos e grifos originais.")
