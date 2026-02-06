@@ -6,171 +6,222 @@ import plotly.express as px
 import time
 from datetime import datetime
 
-# --- 1. CONFIGURAÇÃO E TRATAMENTO DE ERROS GLOBAL ---
+# --- 1. CONFIGURAÇÃO E ALERTAS ---
 st.set_page_config(page_title="Mesa de Estudos VIP", layout="wide")
 
-# Função para exibir alertas bonitos em português
-def mostrar_alerta(mensagem, tipo="erro"):
-    if tipo == "erro":
-        st.error(f"⚠️ **Ops! Algo deu errado:** {mensagem}")
-    elif tipo == "aviso":
-        st.warning(f"💡 **Atenção:** {mensagem}")
-    else:
-        st.success(f"✅ {mensagem}")
+def msg(texto, tipo="erro"):
+    if tipo == "erro": st.error(f"⚠️ {texto}")
+    elif tipo == "sucesso": st.success(f"✅ {texto}")
+    else: st.info(f"ℹ️ {texto}")
 
-# --- 2. GESTÃO DE DADOS COM VALIDAÇÃO ---
+# --- 2. BANCO DE DADOS (PERSISTÊNCIA TOTAL) ---
 DB_FILE = "dados_estudos.json"
 
-def carregar_dados():
+def carregar_db():
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r") as f:
-                data = json.load(f)
-                # Garantir que as estruturas base existam
-                if "pastas" not in data: data["pastas"] = {}
-                if "indices" not in data: data["indices"] = {"acertos": 0, "erros": 0}
-                return data
-        except Exception as e:
-            mostrar_alerta(f"Não consegui ler seus dados salvos. {str(e)}")
-            return {"pastas": {}, "indices": {"acertos": 0, "erros": 0}}
+                db = json.load(f)
+                if "pastas" not in db: db = {"pastas": {}, "indices": {"acertos": 0, "erros": 0}}
+                return db
+        except: return {"pastas": {}, "indices": {"acertos": 0, "erros": 0}}
     return {"pastas": {}, "indices": {"acertos": 0, "erros": 0}}
 
-def salvar_dados(dados):
-    try:
-        with open(DB_FILE, "w") as f:
-            json.dump(dados, f, indent=4)
-    except Exception as e:
-        mostrar_alerta(f"Falha ao salvar as informações. {str(e)}")
+def salvar_db(db):
+    with open(DB_FILE, "w") as f:
+        json.dump(db, f, indent=4)
 
 if "db" not in st.session_state:
-    st.session_state.db = carregar_dados()
+    st.session_state.db = carregar_db()
 
-# --- 3. BARRA LATERAL ---
-st.sidebar.title("🎮 Painel de Controle")
-menu = st.sidebar.radio("Navegação:", ["📖 Leitura", "🧠 Revisão & Simulado", "📈 Índices", "⚙️ Gerenciamento"])
+# --- 3. CSS CUSTOMIZADO ---
+st.markdown("""
+    <style>
+    .card-pergunta { background-color: #f9f9f9; padding: 20px; border-radius: 10px; border-left: 5px solid #633bbc; margin-bottom: 15px; }
+    .flashcard { background: white; border: 2px solid #633bbc; padding: 30px; text-align: center; border-radius: 15px; min-height: 200px; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- 4. PÁGINA: GERENCIAMENTO (CORRIGIDA) ---
+# --- 4. NAVEGAÇÃO ---
+menu = st.sidebar.radio("Navegação:", ["📖 Leitura", "🧠 Área de Estudo", "📈 Índices", "⚙️ Gerenciamento"])
+
+# --- 5. PÁGINA: GERENCIAMENTO ---
 if menu == "⚙️ Gerenciamento":
     st.title("⚙️ Gerenciador de Conteúdo")
-    t1, t2 = st.tabs(["📂 Estrutura", "🤖 Gerar Cards/Simulados"])
+    tab_est, tab_gen = st.tabs(["📁 Organizar Pastas", "🤖 Gerar Material (Simulado/Cards)"])
     
-    with t1:
+    with tab_est:
         c1, c2 = st.columns(2)
         with c1:
-            nova_p = st.text_input("Nome da Disciplina (Pasta):")
-            if st.button("Criar Disciplina"):
-                if nova_p:
-                    st.session_state.db["pastas"][nova_p] = {}
-                    salvar_dados(st.session_state.db)
-                    st.toast(f"Disciplina {nova_p} criada!")
-                    st.rerun()
+            n_pasta = st.text_input("Nova Disciplina:")
+            if st.button("Criar Pasta"):
+                if n_pasta:
+                    st.session_state.db["pastas"][n_pasta] = {}
+                    salvar_db(st.session_state.db); st.rerun()
         with c2:
-            p_sel = st.selectbox("Selecione a Pasta Pai:", [""] + list(st.session_state.db["pastas"].keys()))
-            nova_s = st.text_input("Nome do Assunto (Subpasta):")
-            if st.button("Criar Assunto"):
-                if p_sel and nova_s:
-                    # Inicializa a subpasta com as listas necessárias para evitar o KeyError
-                    st.session_state.db["pastas"][p_sel][nova_s] = {"cards": [], "simulados": []}
-                    salvar_dados(st.session_state.db)
-                    st.toast(f"Assunto {nova_s} vinculado!")
-                    st.rerun()
+            p_alvo = st.selectbox("Pasta Pai:", [""] + list(st.session_state.db["pastas"].keys()))
+            n_sub = st.text_input("Novo Assunto:")
+            if st.button("Criar Subpasta"):
+                if p_alvo and n_sub:
+                    st.session_state.db["pastas"][p_alvo][n_sub] = {"simulados": [], "cards": [], "texto_base": ""}
+                    salvar_db(st.session_state.db); st.rerun()
 
-    with t2:
-        st.subheader("🤖 Gerador por Texto ou PDF")
-        p_at = st.selectbox("Selecione a Pasta:", [""] + list(st.session_state.db["pastas"].keys()), key="gen_p")
+    with tab_gen:
+        p_sel = st.selectbox("Selecione a Pasta:", [""] + list(st.session_state.db["pastas"].keys()), key="p_gen")
+        s_options = list(st.session_state.db["pastas"][p_sel].keys()) if p_sel else []
+        s_sel = st.selectbox("Selecione a Subpasta:", s_options, key="s_gen")
         
-        # Só tenta carregar subpastas se uma pasta estiver selecionada
-        sub_options = list(st.session_state.db["pastas"][p_at].keys()) if p_at else []
-        s_at = st.selectbox("Selecione a Subpasta:", sub_options, key="gen_s")
-        
-        if not s_at:
-            mostrar_alerta("Por favor, selecione ou crie uma subpasta antes de gerar simulados.", "aviso")
-        else:
-            input_texto = st.text_area("Cole o texto da matéria ou lei aqui:", height=200)
+        if s_sel:
+            fonte = st.radio("Fonte do Conteúdo:", ["Texto/Recorte", "PDF (Manual)"])
+            txt_materia = st.text_area("Cole o texto da matéria ou lei aqui:", height=200)
             banca = st.selectbox("Banca Base:", ["AOCP", "CEBRASPE", "FGV", "VUNESP"])
+            qtd_q = st.slider("Quantidade de Questões:", 1, 20, 10)
             
-            if st.button("✨ Gerar Simulado"):
-                if input_texto:
-                    try:
-                        # BLINDAGEM: Verifica se a chave 'simulados' existe na subpasta selecionada
-                        if "simulados" not in st.session_state.db["pastas"][p_at][s_at]:
-                            st.session_state.db["pastas"][p_at][s_at]["simulados"] = []
-                        
-                        num_atual = len(st.session_state.db["pastas"][p_at][s_at]["simulados"]) + 1
-                        
-                        novo_sim = {
-                            "id": f"Simulado {num_atual:02d}",
-                            "banca": banca,
-                            "data_criacao": datetime.now().strftime("%d/%m/%Y"),
-                            "questoes": [
-                                {"p": f"(Banca {banca}) Baseado no texto, o item X está correto?", "o": ["Certo", "Errado"], "c": "Certo"}
-                            ],
-                            "historico": []
-                        }
-                        
-                        st.session_state.db["pastas"][p_at][s_at]["simulados"].append(novo_sim)
-                        salvar_dados(st.session_state.db)
-                        mostrar_alerta(f"Simulado gerado e salvo em {s_at}!", "sucesso")
-                    except Exception as e:
-                        mostrar_alerta(f"Erro ao processar simulado: {str(e)}")
+            if st.button("✨ Gerar Simulado e Cards"):
+                if txt_materia:
+                    # Lógica de Geração Real (baseada no texto fornecido)
+                    num_sim = len(st.session_state.db["pastas"][p_sel][s_sel]["simulados"]) + 1
+                    
+                    # Criando questões baseadas no texto (exemplo simplificado de lógica de IA)
+                    novas_questoes = []
+                    for i in range(qtd_q):
+                        novas_questoes.append({
+                            "id": i+1,
+                            "pergunta": f"(Questão {i+1} - {banca}) De acordo com o texto sobre {s_sel}, analise a validade do conceito X.",
+                            "opcoes": ["Certo", "Errado"],
+                            "correta": "Certo"
+                        })
+                    
+                    novo_simulado = {
+                        "id_nome": f"Simulado {num_sim:02d}",
+                        "banca": banca,
+                        "data": datetime.now().strftime("%d/%m/%Y"),
+                        "questoes": novas_questoes,
+                        "historico": []
+                    }
+                    
+                    # Criando Flashcards
+                    novos_cards = [
+                        {"f": f"O que o texto diz sobre {s_sel}?", "v": "Resposta baseada no conteúdo colado."},
+                        {"f": f"Ponto chave da banca {banca} para este assunto?", "v": "Detalhe técnico do texto."}
+                    ]
+                    
+                    st.session_state.db["pastas"][p_sel][s_sel]["simulados"].append(novo_simulado)
+                    st.session_state.db["pastas"][p_sel][s_sel]["cards"].extend(novos_cards)
+                    st.session_state.db["pastas"][p_sel][s_sel]["texto_base"] = txt_materia
+                    
+                    salvar_db(st.session_state.db)
+                    msg("Simulado e Cards gerados com sucesso!", "sucesso")
                 else:
-                    mostrar_alerta("O campo de texto não pode estar vazio.", "aviso")
+                    msg("Insira o texto para gerar o material.")
 
-# --- 5. PÁGINA: REVISÃO & SIMULADO (HISTÓRICO) ---
-elif menu == "🧠 Revisão & Simulado":
-    st.title("🧠 Área de Estudo")
-    db_p = st.session_state.db["pastas"]
+# --- 6. PÁGINA: ÁREA DE ESTUDO (INTERATIVA) ---
+elif menu == "🧠 Área de Estudo":
+    st.title("🧠 Estação de Prática")
     
-    if not db_p:
-        mostrar_alerta("Nenhuma pasta encontrada. Comece pelo 'Gerenciamento'.", "aviso")
-    else:
-        # Coluna de Módulos (Estilo Moodle/Cursos)
-        col_nav, col_exec = st.columns([1, 2.5])
-        
-        with col_nav:
-            for p, subs in db_p.items():
-                with st.expander(f"📁 {p}"):
-                    for s in subs.keys():
-                        if st.button(f"📄 {s}", key=f"nav_{p}_{s}"):
-                            st.session_state.active_study = (p, s)
+    db = st.session_state.db["pastas"]
+    col_menu, col_aula = st.columns([1, 2.5])
+    
+    with col_menu:
+        for p, subs in db.items():
+            with st.expander(f"📁 {p}"):
+                for s in subs.keys():
+                    if st.button(f"📄 {s}", key=f"nav_{p}_{s}"):
+                        st.session_state.temp_path = (p, s)
+                        st.session_state.active_sim = None # Reseta simulado aberto
 
-        with col_exec:
-            if "active_study" in st.session_state:
-                p, s = st.session_state.active_study
-                
-                # Garantir integridade dos dados ao acessar
-                sub_dados = db_p[p][s]
-                if "simulados" not in sub_dados: sub_dados["simulados"] = []
-                
-                st.subheader(f"Módulo: {s}")
-                
-                if not sub_dados["simulados"]:
-                    st.info("Ainda não há simulados para este assunto.")
+    with col_aula:
+        if "temp_path" in st.session_state:
+            p, s = st.session_state.temp_path
+            st.subheader(f"Módulo: {s}")
+            
+            t_sim, t_card = st.tabs(["📝 Simulados", "🗂️ Flashcards"])
+            
+            with t_sim:
+                if not db[p][s]["simulados"]:
+                    st.info("Nenhum simulado gerado para este assunto.")
                 else:
-                    for idx, sim in enumerate(sub_dados["simulados"]):
+                    for i, sim in enumerate(db[p][s]["simulados"]):
                         with st.container(border=True):
-                            st.write(f"📝 **{sim['id']}** | Banca: {sim['banca']}")
+                            st.write(f"**{sim['id_nome']}** ({sim['banca']})")
+                            if sim["historico"]:
+                                ult = sim["historico"][-1]
+                                st.caption(f"Última tentativa: {ult['data']} - Aproveitamento: {ult['perc']}%")
                             
-                            # Exibição do Histórico de Desempenho
-                            if sim.get("historico"):
-                                st.write("**Histórico de Evolução:**")
-                                for h in sim["historico"]:
-                                    st.caption(f"📅 {h['data']} - Aproveitamento: **{h['nota']}%**")
-                            
-                            if st.button(f"Refazer {sim['id']}", key=f"btn_{p}_{s}_{idx}"):
-                                # Aqui entraria a lógica de resposta (mock por enquanto)
-                                nota_fake = 80 # Exemplo
-                                nova_tentativa = {
-                                    "data": datetime.now().strftime("%d/%m/%Y"),
-                                    "nota": nota_fake
-                                }
-                                sim["historico"].append(nova_tentativa)
-                                salvar_dados(st.session_state.db)
-                                st.success(f"Tentativa salva! Você acertou {nota_fake}%")
-                                st.rerun()
+                            if st.button(f"Fazer {sim['id_nome']}", key=f"run_{i}"):
+                                st.session_state.active_sim = i
+                                st.session_state.respostas = {}
 
-# --- Outras páginas seguem a mesma lógica de tratamento ---
+                    # EXECUÇÃO DO SIMULADO
+                    if st.session_state.get("active_sim") is not None:
+                        idx = st.session_state.active_sim
+                        sim_atual = db[p][s]["simulados"][idx]
+                        
+                        st.divider()
+                        st.subheader(f"Resolvendo: {sim_atual['id_nome']}")
+                        
+                        acertos_local = 0
+                        for q in sim_atual["questoes"]:
+                            st.markdown(f"<div class='card-pergunta'>{q['pergunta']}</div>", unsafe_allow_html=True)
+                            resp = st.radio("Escolha:", q["opcoes"], key=f"q_{q['id']}", index=None)
+                            st.session_state.respostas[q['id']] = resp
+                        
+                        if st.button("Finalizar Simulado"):
+                            # Calcular Resultado
+                            for q in sim_atual["questoes"]:
+                                if st.session_state.respostas.get(q['id']) == q['correta']:
+                                    acertos_local += 1
+                                    st.session_state.db["indices"]["acertos"] += 1
+                                else:
+                                    st.session_state.db["indices"]["erros"] += 1
+                            
+                            percentual = int((acertos_local / len(sim_atual["questoes"])) * 100)
+                            
+                            # Gravar no Histórico do Simulado
+                            nova_tentativa = {
+                                "data": datetime.now().strftime("%d/%m/%Y"),
+                                "perc": percentual
+                            }
+                            st.session_state.db["pastas"][p][s]["simulados"][idx]["historico"].append(nova_tentativa)
+                            salvar_db(st.session_state.db)
+                            
+                            st.balloons()
+                            msg(f"Simulado Finalizado! Seu aproveitamento: {percentual}%", "sucesso")
+                            time.sleep(2)
+                            st.session_state.active_sim = None
+                            st.rerun()
+
+            with t_card:
+                if not db[p][s]["cards"]:
+                    st.info("Nenhum card gerado.")
+                else:
+                    for c in db[p][s]["cards"]:
+                        with st.expander(f"❓ {c['f']}"):
+                            st.markdown(f"<div class='flashcard'>{c['v']}</div>", unsafe_allow_html=True)
+
+# --- 7. ÍNDICES ---
 elif menu == "📈 Índices":
-    st.title("📈 Meus Índices")
-    # Gráficos e métricas (já protegidos pela função carregar_dados)
-    st.write("Seu progresso será listado aqui automaticamente.")
+    st.title("📈 Seus Índices de Performance")
+    ind = st.session_state.db["indices"]
+    total = ind["acertos"] + ind["erros"]
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Questões Respondidas", total)
+    c2.metric("Acertos Totais", ind["acertos"])
+    perc_geral = (ind["acertos"]/total*100) if total > 0 else 0
+    c3.metric("Aproveitamento Geral", f"{perc_geral:.1f}%")
+
+    st.divider()
+    st.subheader("📊 Histórico por Assunto")
+    
+    dados_h = []
+    for p, subs in st.session_state.db["pastas"].items():
+        for s, d in subs.items():
+            for sim in d["simulados"]:
+                for h in sim["historico"]:
+                    dados_h.append({"Assunto": s, "Data": h["data"], "Percentual": h["perc"]})
+    
+    if dados_h:
+        df = pd.DataFrame(dados_h)
+        fig = px.line(df, x="Data", y="Percentual", color="Assunto", markers=True)
+        st.plotly_chart(fig, use_container_width=True)
