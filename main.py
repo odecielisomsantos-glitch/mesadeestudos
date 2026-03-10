@@ -5,179 +5,168 @@ from datetime import datetime, date
 import plotly.express as px
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Monitor de Estudos Pro", layout="wide", page_icon="📚")
+st.set_page_config(page_title="Meu Dashboard de Estudos", layout="wide", page_icon="📚")
 
 # --- FUNÇÕES DO BANCO DE DADOS ---
 def init_db():
-    conn = sqlite3.connect('estudos_v4.db', check_same_thread=False)
+    conn = sqlite3.connect('estudos_v5.db', check_same_thread=False)
     c = conn.cursor()
     # Tabela de registros de estudo
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS registros (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            materia TEXT,
-            tipo_material TEXT,
-            assunto TEXT,
-            tempo_minutos INTEGER,
-            questoes_feitas INTEGER,
-            questoes_acertos INTEGER,
-            data DATE
-        )
-    ''')
-    # Tabela de matérias cadastradas
+    c.execute('''CREATE TABLE IF NOT EXISTS registros (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, materia TEXT, tipo_material TEXT, 
+        assunto TEXT, tempo_minutos INTEGER, questoes_feitas INTEGER, 
+        questoes_acertos INTEGER, data DATE)''')
+    # Tabela de matérias
     c.execute('CREATE TABLE IF NOT EXISTS materias (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT UNIQUE)')
+    # Tabela de pastas (Keep)
+    c.execute('CREATE TABLE IF NOT EXISTS pastas (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT, pai_id INTEGER DEFAULT NULL)')
+    # Tabela de cards (Keep)
+    c.execute('CREATE TABLE IF NOT EXISTS cards (id INTEGER PRIMARY KEY AUTOINCREMENT, titulo TEXT, conteudo TEXT, pasta_id INTEGER, cor TEXT, data_criacao DATETIME)')
     
-    # Inserir matérias iniciais se estiver vazio
+    # Inserir matérias padrão se vazio
     c.execute('SELECT COUNT(*) FROM materias')
     if c.fetchone()[0] == 0:
-        materias_padrao = [("Programação",), ("Matemática",), ("Português",), ("Inglês",)]
-        c.executemany('INSERT INTO materias (nome) VALUES (?)', materias_padrao)
-    
+        c.executemany('INSERT INTO materias (nome) VALUES (?)', [("Programação",), ("Matemática",), ("Português",)])
     conn.commit()
     return conn
 
 conn = init_db()
 
 def get_materias():
-    df_m = pd.read_sql_query("SELECT nome FROM materias ORDER BY nome", conn)
-    return df_m['nome'].tolist()
+    return pd.read_sql_query("SELECT nome FROM materias ORDER BY nome", conn)['nome'].tolist()
 
 # --- BARRA LATERAL (SIDEBAR) ---
 st.sidebar.title("🎯 Navegação")
-pagina = st.sidebar.radio("Ir para:", ["📝 Registrar Estudo", "📊 Dashboard", "📅 Histórico & Calendário", "⚙️ Configurar Matérias"])
+pagina = st.sidebar.radio("Ir para:", ["📝 Registrar Estudo", "📊 Dashboard", "📅 Histórico", "💡 Keep (Cards)", "⚙️ Configurações"])
 
 # --- PÁGINA 1: REGISTRAR ESTUDO ---
 if pagina == "📝 Registrar Estudo":
     st.title("📝 Novo Registro de Estudo")
     lista_materias = get_materias()
     
-    if not lista_materias:
-        st.warning("⚠️ Nenhuma matéria cadastrada. Vá em 'Configurar Matérias' primeiro.")
-    else:
-        with st.form("form_estudos", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                materia = st.selectbox("Selecione a Matéria", lista_materias)
-                data_estudo = st.date_input("Data do Estudo", date.today())
-                tipo_material = st.radio("Tipo de Estudo", ["Vídeo Aula", "PDF / Leitura", "Apenas Questões"])
-                
-            with col2:
-                assunto = st.text_input("Assunto / Tópico detalhado")
-                tempo = st.number_input("Tempo investido (minutos)", min_value=0, step=5)
-            
-            st.divider()
-            st.subheader("✍️ Desempenho em Questões")
-            c1, c2 = st.columns(2)
-            q_feitas = c1.number_input("Questões Feitas", min_value=0, step=1)
-            q_acertos = c2.number_input("Acertos", min_value=0, step=1)
-            
-            btn_salvar = st.form_submit_button("Salvar Progresso")
-            
-            if btn_salvar:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO registros (materia, tipo_material, assunto, tempo_minutos, questoes_feitas, questoes_acertos, data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (materia, tipo_material, assunto, tempo, q_feitas, q_acertos, data_estudo))
-                conn.commit()
-                st.success(f"Registro de {materia} salvo com sucesso!")
+    with st.form("form_estudos", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            materia = st.selectbox("Matéria", lista_materias)
+            data_estudo = st.date_input("Data", date.today())
+            tipo_material = st.radio("Tipo de Material", ["Vídeo Aula", "PDF / Leitura", "Apenas Questões"])
+        with col2:
+            assunto = st.text_input("Assunto detalhado")
+            tempo = st.number_input("Tempo (minutos)", min_value=0, step=5)
+        
+        st.divider()
+        st.subheader("✍️ Questões")
+        c1, c2 = st.columns(2)
+        q_feitas = c1.number_input("Feitas", min_value=0)
+        q_acertos = c2.number_input("Acertos", min_value=0)
+        
+        if st.form_submit_button("Salvar Progresso"):
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO registros (materia, tipo_material, assunto, tempo_minutos, questoes_feitas, questoes_acertos, data) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                           (materia, tipo_material, assunto, tempo, q_feitas, q_acertos, data_estudo))
+            conn.commit()
+            st.success("Salvo com sucesso!")
 
 # --- PÁGINA 2: DASHBOARD ---
 elif pagina == "📊 Dashboard":
     st.title("📊 Análise de Desempenho")
     df = pd.read_sql_query("SELECT * FROM registros", conn)
-    df['data'] = pd.to_datetime(df['data'])
-
     if not df.empty:
-        # Filtro lateral de período
-        st.sidebar.divider()
-        st.sidebar.subheader("Filtros")
+        df['data'] = pd.to_datetime(df['data'])
+        # Filtro de Período
+        st.sidebar.subheader("Filtro de Data")
         data_ini = st.sidebar.date_input("Início", df['data'].min())
         data_fim = st.sidebar.date_input("Fim", df['data'].max())
-        
-        mask = (df['data'].dt.date >= data_ini) & (df['data'].dt.date <= data_fim)
-        df_f = df.loc[mask]
+        df_f = df[(df['data'].dt.date >= data_ini) & (df['data'].dt.date <= data_fim)]
 
-        # Métricas de topo
-        m1, m2, m3, m4 = st.columns(4)
-        total_min = df_f['tempo_minutos'].sum()
+        # Métricas
+        m1, m2, m3 = st.columns(3)
         total_q = df_f['questoes_feitas'].sum()
         total_a = df_f['questoes_acertos'].sum()
-        perc = (total_a / total_q * 100) if total_q > 0 else 0
-        
-        m1.metric("Tempo Total", f"{total_min/60:.1f}h")
-        m2.metric("Questões", total_q)
-        m3.metric("Acertos", total_a)
-        m4.metric("Aproveitamento", f"{perc:.1f}%")
+        m1.metric("Tempo Total", f"{df_f['tempo_minutos'].sum()/60:.1f}h")
+        m2.metric("Total Questões", total_q)
+        m3.metric("Aproveitamento", f"{(total_a/total_q*100 if total_q > 0 else 0):.1f}%")
 
         # Gráficos
-        col_esq, col_dir = st.columns(2)
-        
-        with col_esq:
-            fig_tempo = px.pie(df_f, values='tempo_minutos', names='materia', title="Tempo por Matéria", hole=0.3)
-            st.plotly_chart(fig_tempo, use_container_width=True)
-            
-        with col_dir:
-            fig_tipo = px.bar(df_f, x='tipo_material', y='tempo_minutos', color='materia', title="Distribuição por Tipo de Material")
-            st.plotly_chart(fig_tipo, use_container_width=True)
-
-        st.subheader("📈 Evolução de Acertos (%)")
-        df_evolucao = df_f.groupby('data').apply(lambda x: (x['questoes_acertos'].sum() / x['questoes_feitas'].sum() * 100) if x['questoes_feitas'].sum() > 0 else 0).reset_index()
-        df_evolucao.columns = ['Data', 'Percentual']
-        fig_line = px.line(df_evolucao, x='Data', y='Percentual', markers=True)
-        st.plotly_chart(fig_line, use_container_width=True)
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            st.plotly_chart(px.pie(df_f, values='tempo_minutos', names='materia', title="Tempo por Matéria", hole=0.4))
+        with col_g2:
+            st.plotly_chart(px.bar(df_f, x='tipo_material', y='tempo_minutos', color='materia', title="Distribuição por Material"))
     else:
-        st.info("Ainda não há dados para exibir. Comece a registrar seus estudos!")
+        st.info("Sem dados registrados.")
 
-# --- PÁGINA 3: HISTÓRICO & CALENDÁRIO ---
-elif pagina == "📅 Histórico & Calendário":
-    st.title("📅 Histórico de Estudos")
+# --- PÁGINA 3: HISTÓRICO ---
+elif pagina == "📅 Histórico":
+    st.title("📅 Histórico Diário")
     df = pd.read_sql_query("SELECT * FROM registros ORDER BY data DESC", conn)
+    st.dataframe(df, use_container_width=True)
+
+# --- PÁGINA 4: KEEP (CARDS E PASTAS) ---
+elif pagina == "💡 Keep (Cards)":
+    st.title("💡 Keep: Notas e Resumos")
     
-    if not df.empty:
-        col_cal, col_list = st.columns([1, 2])
-        
-        with col_cal:
-            data_sel = st.date_input("Filtrar por data específica:")
-            
-        dia_f = df[df['data'] == str(data_sel)]
-        if not dia_f.empty:
-            st.subheader(f"Resumo do dia {data_sel}")
-            st.table(dia_f[['materia', 'tipo_material', 'assunto', 'tempo_minutos', 'questoes_feitas', 'questoes_acertos']])
-        else:
-            st.info(f"Sem registros para o dia {data_sel}")
+    # Gerenciar Pastas na Sidebar
+    st.sidebar.divider()
+    with st.sidebar.expander("📂 Gerenciar Pastas"):
+        nova_p = st.text_input("Nome da Pasta")
+        df_p_check = pd.read_sql_query("SELECT * FROM pastas", conn)
+        pai_p = st.selectbox("Pasta Pai (Subpasta)", ["Nenhuma"] + df_p_check['nome'].tolist())
+        if st.button("Criar Pasta"):
+            pai_id = df_p_check[df_p_check['nome'] == pai_p]['id'].values[0] if pai_p != "Nenhuma" else None
+            conn.cursor().execute("INSERT INTO pastas (nome, pai_id) VALUES (?, ?)", (nova_p, pai_id))
+            conn.commit()
+            st.rerun()
 
-        st.divider()
-        st.subheader("Todos os registros")
-        st.dataframe(df.drop(columns=['id']), use_container_width=True)
-    else:
-        st.info("Nenhum histórico disponível.")
+    # Seleção de Pasta para exibição
+    df_pastas = pd.read_sql_query("SELECT * FROM pastas", conn)
+    pasta_selecionada = st.selectbox("📂 Selecione a Pasta/Subpasta", ["Todas"] + df_pastas['nome'].tolist())
+    p_id_filtro = df_pastas[df_pastas['nome'] == pasta_selecionada]['id'].values[0] if pasta_selecionada != "Todas" else None
 
-# --- PÁGINA 4: CONFIGURAR MATÉRIAS ---
-elif pagina == "⚙️ Configurar Matérias":
+    # Criar Card
+    with st.expander("➕ Adicionar Novo Card"):
+        c_tit = st.text_input("Título")
+        c_cor = st.color_picker("Cor", "#1e1e1e")
+        c_cont = st.text_area("Conteúdo (Markdown)")
+        c_pasta = st.selectbox("Salvar na pasta:", df_pastas['nome'].tolist())
+        if st.button("Fixar Nota"):
+            p_id_salvar = df_pastas[df_pastas['nome'] == c_pasta]['id'].values[0]
+            conn.cursor().execute("INSERT INTO cards (titulo, conteudo, pasta_id, cor, data_criacao) VALUES (?, ?, ?, ?, ?)",
+                                  (c_tit, c_cont, p_id_salvar, c_cor, datetime.now()))
+            conn.commit()
+            st.rerun()
+
+    # Mostrar Cards
+    query = "SELECT * FROM cards" + (f" WHERE pasta_id = {p_id_filtro}" if p_id_filtro else "")
+    df_cards = pd.read_sql_query(query, conn)
+    
+    cols = st.columns(3)
+    for i, (_, card) in enumerate(df_cards.iterrows()):
+        with cols[i % 3]:
+            st.markdown(f"""<div style="background-color:{card['cor']}; padding:15px; border-radius:10px; border:1px solid #444; margin-bottom:10px">
+                <h4 style='margin:0'>{card['titulo']}</h4><p style='font-size:13px'>{card['conteudo']}</p></div>""", unsafe_allow_html=True)
+            if st.button("Apagar", key=f"del_{card['id']}"):
+                conn.cursor().execute("DELETE FROM cards WHERE id = ?", (card['id'],))
+                conn.commit()
+                st.rerun()
+
+# --- PÁGINA 5: CONFIGURAÇÕES ---
+elif pagina == "⚙️ Configurações":
     st.title("⚙️ Gerenciar Matérias")
+    with st.form("add_mat"):
+        nova_m = st.text_input("Nova Matéria")
+        if st.form_submit_button("Adicionar"):
+            try:
+                conn.cursor().execute("INSERT INTO materias (nome) VALUES (?)", (nova_m,))
+                conn.commit()
+                st.rerun()
+            except: st.error("Matéria já existe.")
     
-    with st.expander("➕ Adicionar Nova Matéria"):
-        nova_mat = st.text_input("Nome da disciplina")
-        if st.button("Cadastrar"):
-            if nova_mat:
-                try:
-                    cursor = conn.cursor()
-                    cursor.execute("INSERT INTO materias (nome) VALUES (?)", (nova_mat,))
-                    conn.commit()
-                    st.success(f"'{nova_mat}' adicionada com sucesso!")
-                    st.rerun()
-                except:
-                    st.error("Erro: Esta matéria já existe.")
-    
-    st.subheader("Matérias Cadastradas")
-    materias_list = get_materias()
-    for m in materias_list:
-        c1, c2 = st.columns([3, 1])
-        c1.write(f"📚 {m}")
-        if c2.button("Excluir", key=f"del_{m}"):
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM materias WHERE nome = ?", (m,))
+    mats = get_materias()
+    for m in mats:
+        col_a, col_b = st.columns([4,1])
+        col_a.write(m)
+        if col_b.button("Remover", key=f"rm_{m}"):
+            conn.cursor().execute("DELETE FROM materias WHERE nome = ?", (m,))
             conn.commit()
             st.rerun()
