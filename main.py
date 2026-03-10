@@ -6,8 +6,9 @@ import plotly.express as px
 
 # --- CONFIGURAÇÃO DO BANCO DE DADOS ---
 def init_db():
-    conn = sqlite3.connect('estudos_v2.db', check_same_thread=False)
+    conn = sqlite3.connect('estudos_v3.db', check_same_thread=False)
     c = conn.cursor()
+    # Tabela de Registros
     c.execute('''
         CREATE TABLE IF NOT EXISTS registros (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,106 +21,106 @@ def init_db():
             data DATE
         )
     ''')
+    # Tabela de Matérias (Nova!)
+    c.execute('CREATE TABLE IF NOT EXISTS materias (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT UNIQUE)')
+    
+    # Inserir matérias padrão se a tabela estiver vazia
+    c.execute('SELECT COUNT(*) FROM materias')
+    if c.fetchone()[0] == 0:
+        materias_iniciais = [("Programação",), ("Matemática",), ("Português",)]
+        c.executemany('INSERT INTO materias (nome) VALUES (?)', materias_iniciais)
+    
     conn.commit()
     return conn
 
 conn = init_db()
 
-# --- BARRA LATERAL (SIDEBAR) ---
-st.sidebar.title("🎯 Menu de Navegação")
-pagina = st.sidebar.radio("Ir para:", ["📝 Registrar Estudo", "📊 Dashboard & Análise", "📅 Calendário"])
+# Função auxiliar para buscar matérias
+def get_materias():
+    df_m = pd.read_sql_query("SELECT nome FROM materias ORDER BY nome", conn)
+    return df_m['nome'].tolist()
 
-# --- PÁGINA 1: REGISTRO ---
-if pagina == "📝 Registrar Estudo":
-    st.title("📝 Novo Registro de Estudo")
+# --- BARRA LATERAL ---
+st.sidebar.title("🎯 Menu de Navegação")
+pagina = st.sidebar.radio("Ir para:", ["📝 Registrar Estudo", "📊 Dashboard", "📅 Calendário", "⚙️ Gerenciar Matérias"])
+
+# --- PÁGINA: GERENCIAR MATÉRIAS ---
+if pagina == "⚙️ Gerenciar Matérias":
+    st.title("⚙️ Configurações de Matérias")
+    
+    # Adicionar Nova Matéria
+    with st.expander("➕ Adicionar Nova Matéria"):
+        nova_materia = st.text_input("Nome da Matéria")
+        if st.button("Salvar Matéria"):
+            if nova_materia:
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("INSERT INTO materias (nome) VALUES (?)", (nova_materia,))
+                    conn.commit()
+                    st.success(f"'{nova_materia}' adicionada!")
+                    st.rerun()
+                except:
+                    st.error("Esta matéria já existe.")
+    
+    # Listar e Excluir Matérias
+    st.subheader("Lista de Matérias Atuais")
+    lista_m = get_materias()
+    for m in lista_m:
+        col_m, col_btn = st.columns([3, 1])
+        col_m.write(f"📖 {m}")
+        if col_btn.button("Excluir", key=m):
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM materias WHERE nome = ?", (m,))
+            conn.commit()
+            st.rerun()
+
+# --- PÁGINA: REGISTRAR ESTUDO (Atualizada) ---
+elif pagina == "📝 Registrar Estudo":
+    st.title("📝 Novo Registro")
+    lista_materias = get_materias()
     
     with st.form("form_estudos", clear_on_submit=True):
         col1, col2 = st.columns(2)
-        
         with col1:
-            materia = st.selectbox("Matéria", ["Programação", "Matemática", "Direito", "Português", "Outros"])
-            data_estudo = st.date_input("Data do Estudo", date.today())
-            tipo_material = st.radio("Tipo de Material", ["Vídeo Aula", "PDF / Leitura"])
-            
+            materia = st.selectbox("Selecione a Matéria", lista_materias)
+            data_estudo = st.date_input("Data", date.today())
+            tipo_material = st.radio("Material", ["Vídeo Aula", "PDF / Leitura"])
         with col2:
-            assunto = st.text_input("Assunto detalhado")
-            tempo = st.number_input("Tempo investido (minutos)", min_value=0, step=5)
+            assunto = st.text_input("Assunto")
+            tempo = st.number_input("Tempo (min)", min_value=0, step=5)
             
         st.divider()
-        st.subheader("✍️ Desempenho em Questões")
+        st.subheader("✍️ Questões")
         c1, c2 = st.columns(2)
-        q_feitas = c1.number_input("Questões Feitas", min_value=0, step=1)
-        q_acertos = c2.number_input("Questões Certas", min_value=0, step=1)
+        q_feitas = c1.number_input("Feitas", min_value=0)
+        q_acertos = c2.number_input("Acertos", min_value=0)
         
         if st.form_submit_button("Salvar Registro"):
             cursor = conn.cursor()
-            cursor.execute('''
-                INSERT INTO registros (materia, tipo_material, assunto, tempo_minutos, questoes_feitas, questoes_acertos, data)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (materia, tipo_material, assunto, tempo, q_feitas, q_acertos, data_estudo))
+            cursor.execute('''INSERT INTO registros (materia, tipo_material, assunto, tempo_minutos, questoes_feitas, questoes_acertos, data)
+                              VALUES (?, ?, ?, ?, ?, ?, ?)''', 
+                           (materia, tipo_material, assunto, tempo, q_feitas, q_acertos, data_estudo))
             conn.commit()
-            st.success("Dados salvos com sucesso!")
+            st.success("Salvo!")
 
-# --- PÁGINA 2: DASHBOARD ---
-elif pagina == "📊 Dashboard & Análise":
-    st.title("📊 Análise de Desempenho")
-    
+# --- PÁGINA: DASHBOARD (Resumida para o exemplo) ---
+elif pagina == "📊 Dashboard":
+    st.title("📊 Dashboard")
     df = pd.read_sql_query("SELECT * FROM registros", conn)
-    df['data'] = pd.to_datetime(df['data'])
-
     if not df.empty:
-        # Filtro de Período
-        st.sidebar.divider()
-        data_inicio = st.sidebar.date_input("Início", df['data'].min())
-        data_fim = st.sidebar.date_input("Fim", df['data'].max())
+        # Gráfico de tempo por matéria
+        fig = px.bar(df, x='materia', y='tempo_minutos', color='tipo_material', title="Tempo de Estudo")
+        st.plotly_chart(fig)
         
-        mask = (df['data'].dt.date >= data_inicio) & (df['data'].dt.date <= data_fim)
-        df_filtrado = df.loc[mask]
-
-        # Métricas Principais
-        m1, m2, m3 = st.columns(3)
-        total_horas = df_filtrado['tempo_minutos'].sum() / 60
-        total_q = df_filtrado['questoes_feitas'].sum()
-        acertos = df_filtrado['questoes_acertos'].sum()
-        perc = (acertos / total_q * 100) if total_q > 0 else 0
-        
-        m1.metric("Tempo Total", f"{total_horas:.1f}h")
-        m2.metric("Questões", total_q)
-        m3.metric("Aproveitamento", f"{perc:.1f}%")
-
-        # Gráficos
-        col_graf1, col_graf2 = st.columns(2)
-        
-        with col_graf1:
-            fig_tempo = px.pie(df_filtrado, values='tempo_minutos', names='materia', title="Tempo por Matéria")
-            st.plotly_chart(fig_tempo, use_container_width=True)
-            
-        with col_graf2:
-            fig_tipo = px.bar(df_filtrado, x='tipo_material', y='tempo_minutos', color='materia', title="Aula vs PDF (minutos)")
-            st.plotly_chart(fig_tipo, use_container_width=True)
-
-        st.subheader("📈 Evolução de Acertos")
-        fig_evolucao = px.line(df_filtrado.sort_values('data'), x='data', y='questoes_acertos', title="Acertos ao longo do tempo")
-        st.plotly_chart(fig_evolucao, use_container_width=True)
+        # Tabela de acertos
+        df['perc'] = (df['questoes_acertos'] / df['questoes_feitas'] * 100).fillna(0)
+        st.write("Desempenho por Matéria:")
+        st.dataframe(df.groupby('materia')[['questoes_feitas', 'questoes_acertos', 'perc']].mean())
     else:
-        st.warning("Ainda não há dados para gerar o dashboard.")
+        st.info("Sem dados.")
 
-# --- PÁGINA 3: CALENDÁRIO ---
+# --- PÁGINA: CALENDÁRIO ---
 elif pagina == "📅 Calendário":
-    st.title("📅 Histórico Diário")
+    st.title("📅 Calendário")
     df = pd.read_sql_query("SELECT * FROM registros ORDER BY data DESC", conn)
-    
-    if not df.empty:
-        # Visualização em estilo lista/calendário simples
-        selected_date = st.date_input("Selecione uma data para ver o que estudou:")
-        dia_especifico = df[df['data'] == str(selected_date)]
-        
-        if not dia_especifico.empty:
-            st.write(f"Estudos de {selected_date}:")
-            st.table(dia_especifico[['materia', 'tipo_material', 'assunto', 'tempo_minutos']])
-        else:
-            st.info("Nenhum registro para este dia.")
-            
-        st.divider()
-        st.subheader("Todos os registros")
-        st.dataframe(df, use_container_width=True)
+    st.dataframe(df)
