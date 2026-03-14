@@ -1,81 +1,114 @@
 import streamlit as st
-import json
-import os
+import pandas as pd
 
-# Configuração da página
-st.set_page_config(page_title="Foco na Missão", page_icon="🎯")
+# 1. Configuração da Página e Estética Dark
+st.set_page_config(
+    page_title="Foco na Missão",
+    page_icon="🎯",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- FUNÇÕES DE PERSISTÊNCIA DE DADOS ---
-DB_FILE = "usuarios.json"
+# Estilização CSS para forçar o tema escuro e customizar os cards
+st.markdown("""
+    <style>
+    [data-testid="stSidebar"] {
+        background-color: #111111;
+    }
+    .main {
+        background-color: #0E1117;
+    }
+    div.stButton > button:first-child {
+        background-color: #4CAF50;
+        color: white;
+    }
+    .metric-card {
+        background-color: #1E1E1E;
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 5px solid #4CAF50;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-def carregar_usuarios():
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r") as f:
-            return json.load(f)
-    return {"odecielisonsonadson02@gmail.com": "ode123"}
+# --- BARRA LATERAL (SIDEBAR) ---
+with st.sidebar:
+    st.title("🎯 FOCO NA MISSÃO")
+    st.write("---")
+    
+    # Menu de Navegação
+    menu = st.radio(
+        "Navegação",
+        ["Dashboard", "Registrar Estudo", "Cronômetro", "Desempenho", "Relatórios", "Ranking", "Perfil"],
+        index=0
+    )
+    
+    st.write("---")
+    st.caption("Você tem acesso completo!")
 
-def salvar_usuario(email, senha):
-    usuarios = carregar_usuarios()
-    usuarios[email] = senha
-    with open(DB_FILE, "w") as f:
-        json.dump(usuarios, f)
+# --- CONTEÚDO PRINCIPAL: DASHBOARD ---
+if menu == "Dashboard":
+    st.write(f"### Olá, Guerreiro! 👋")
+    st.caption("sábado, 7 de fevereiro")
 
-# --- SISTEMA DE ESTADO DA SESSÃO ---
-if "logado" not in st.session_state:
-    st.session_state.logado = False
+    # Colunas para os Cards de Métricas (Igual à imagem)
+    col1, col2, col3 = st.columns(3)
 
-# --- INTERFACE ---
+    with col1:
+        st.markdown("""
+            <div class="metric-card">
+                <p style='color: gray; margin-bottom: 0;'>HORAS NA SEMANA</p>
+                <h2 style='margin-top: 0;'>7h 5min</h2>
+                <p style='color: #4CAF50; font-size: 0.8rem;'>Meta: 30h</p>
+            </div>
+        """, unsafe_allow_html=True)
 
-st.title("🎯 Foco na Missão")
-st.subheader("Plataforma de Registro e Análise de Estudos")
+    with col2:
+        st.markdown("""
+            <div class="metric-card">
+                <p style='color: gray; margin-bottom: 0;'>QUESTÕES NA SEMANA</p>
+                <h2 style='margin-top: 0;'>162</h2>
+                <p style='color: #4CAF50; font-size: 0.8rem;'>75% de acerto</p>
+            </div>
+        """, unsafe_allow_html=True)
 
-if not st.session_state.logado:
-    tab1, tab2 = st.tabs(["Login", "Cadastrar Novo Usuário"])
-
-    with tab1:
-        st.write("### Acessar conta")
-        email_input = st.text_input("Email")
-        senha_input = st.text_input("Senha", type="password")
-        
-        if st.button("Entrar"):
-            usuarios = carregar_usuarios()
-            if email_input in usuarios and usuarios[email_input] == senha_input:
-                st.session_state.logado = True
-                st.success("Login realizado com sucesso!")
-                st.rerun()
-            else:
-                st.error("Usuário ou senha incorretos.")
-
-    with tab2:
-        st.write("### Criar nova conta")
-        novo_email = st.text_input("Novo Email")
-        nova_senha = st.text_input("Nova Senha", type="password")
-        confirmar_senha = st.text_input("Confirme a Senha", type="password")
-
-        if st.button("Cadastrar"):
-            usuarios = carregar_usuarios()
-            if novo_email in usuarios:
-                st.warning("Este email já está cadastrado.")
-            elif nova_senha != confirmar_senha:
-                st.error("As senhas não coincidem.")
-            elif novo_email == "" or nova_senha == "":
-                st.error("Preencha todos os campos.")
-            else:
-                salvar_usuario(novo_email, nova_senha)
-                st.success("Usuário cadastrado com sucesso! Agora vá para a aba de Login.")
-
-else:
-    # --- ÁREA LOGADA ---
-    st.sidebar.write(f"Conectado como: {email_input if 'email_input' in locals() else 'Usuário'}")
-    if st.sidebar.button("Sair"):
-        st.session_state.logado = False
-        st.rerun()
+    with col3:
+        st.markdown("""
+            <div class="metric-card">
+                <p style='color: gray; margin-bottom: 0;'>ACERTO GERAL</p>
+                <h2 style='margin-top: 0;'>80%</h2>
+                <p style='color: #4CAF50; font-size: 0.8rem;'>1866 questões</p>
+            </div>
+        """, unsafe_allow_html=True)
 
     st.write("---")
-    st.write("## Bem-vindo à sua área de estudos!")
-    st.info("Aqui começaremos a registrar suas missões e análises.")
+
+    # Barra de Progresso
+    st.write("### Horas de Estudo (Meta semanal)")
+    progresso = 0.24 # 24% conforme imagem
+    st.progress(progresso)
+    st.write(f"**{progresso*100:.0f}% concluído** | Faltam 22h 55min")
     
-    # Exemplo de onde os registros entrarão futuramente
-    st.date_input("Data do estudo")
-    st.text_input("O que você estudou hoje?")
-    st.button("Salvar Registro")
+    st.warning("⚠️ Você está abaixo do ritmo. Intensifique!")
+
+    # Gráfico de exemplo (Horas por dia)
+    st.write("### Horas por Dia")
+    dados_grafico = pd.DataFrame({
+        'Dia': ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab', 'Dom'],
+        'Horas': [1, 2.5, 4, 1.5, 0, 0, 0]
+    })
+    st.bar_chart(data=dados_grafico, x='Dia', y='Horas', color="#4CAF50")
+
+# --- OUTRAS PÁGINAS (Simulação) ---
+elif menu == "Registrar Estudo":
+    st.header("📝 Registrar Nova Missão")
+    materia = st.selectbox("Matéria", ["Matemática", "Português", "Direito", "Informática"])
+    tempo = st.number_input("Tempo de estudo (minutos)", min_value=0)
+    questoes = st.number_input("Questões resolvidas", min_value=0)
+    acertos = st.number_input("Acertos", min_value=0)
+    
+    if st.button("Salvar na Missão"):
+        st.success(f"Registro de {materia} salvo com sucesso!")
+
+else:
+    st.write(f"Você selecionou: **{menu}**. Esta página está em desenvolvimento.")
