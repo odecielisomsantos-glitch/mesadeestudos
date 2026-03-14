@@ -1,42 +1,82 @@
 import streamlit as st
 import pandas as pd
 
-# 1. Configuração da Página e Estética Dark
+# 1. Configuração da Página
 st.set_page_config(
     page_title="Foco na Missão",
     page_icon="🎯",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-# Estilização CSS para forçar o tema escuro e customizar os cards
+# 2. Injeção de CSS para o Tema Escuro Real e Fontes
 st.markdown("""
     <style>
-    [data-testid="stSidebar"] {
-        background-color: #111111;
+    /* Fundo total da página e da sidebar */
+    [data-testid="stAppViewContainer"], [data-testid="stSidebar"], .main {
+        background-color: #0E1117 !important;
+        color: #FFFFFF !important;
     }
-    .main {
-        background-color: #0E1117;
+
+    /* Ajuste de fontes de títulos e textos */
+    h1, h2, h3, p, span, label {
+        color: #FFFFFF !important;
+        font-family: 'sans serif';
     }
-    div.stButton > button:first-child {
-        background-color: #4CAF50;
-        color: white;
-    }
+
+    /* Estilização dos Cards de Métricas */
     .metric-card {
         background-color: #1E1E1E;
         padding: 20px;
         border-radius: 10px;
         border-left: 5px solid #4CAF50;
+        margin-bottom: 10px;
+    }
+    
+    .metric-title {
+        color: #808080 !important;
+        font-size: 12px;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .metric-value {
+        color: #FFFFFF !important;
+        font-size: 32px;
+        font-weight: bold;
+    }
+    
+    .metric-footer {
+        color: #4CAF50 !important;
+        font-size: 14px;
+    }
+
+    /* Barra lateral - itens do menu */
+    [data-testid="stSidebarNav"] {
+        background-color: #0E1117 !important;
+    }
+    
+    /* Botões e Inputs */
+    div.stButton > button {
+        background-color: #4CAF50;
+        color: white;
+        border-radius: 5px;
+        width: 100%;
+    }
+
+    /* Estilo do Alerta (Warning) */
+    .stAlert {
+        background-color: #262730 !important;
+        color: #FFA500 !important;
+        border: 1px solid #FFA500;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- BARRA LATERAL (SIDEBAR) ---
+# --- BARRA LATERAL ---
 with st.sidebar:
-    st.title("🎯 FOCO NA MISSÃO")
+    st.markdown("<h2 style='color: #4CAF50;'>🎯 FOCO NA MISSÃO</h2>", unsafe_allow_html=True)
     st.write("---")
     
-    # Menu de Navegação
     menu = st.radio(
         "Navegação",
         ["Dashboard", "Registrar Estudo", "Cronômetro", "Desempenho", "Relatórios", "Ranking", "Perfil"],
@@ -46,69 +86,59 @@ with st.sidebar:
     st.write("---")
     st.caption("Você tem acesso completo!")
 
-# --- CONTEÚDO PRINCIPAL: DASHBOARD ---
+# --- CONTEÚDO PRINCIPAL ---
 if menu == "Dashboard":
-    st.write(f"### Olá, Guerreiro! 👋")
-    st.caption("sábado, 7 de fevereiro")
+    st.markdown("### Olá, Guerreiro! 👋")
+    st.markdown("<p style='color: #808080;'>sábado, 7 de fevereiro</p>", unsafe_allow_html=True)
 
-    # Colunas para os Cards de Métricas (Igual à imagem)
+    # Cards customizados via HTML para total controle de cor
     col1, col2, col3 = st.columns(3)
 
     with col1:
         st.markdown("""
             <div class="metric-card">
-                <p style='color: gray; margin-bottom: 0;'>HORAS NA SEMANA</p>
-                <h2 style='margin-top: 0;'>7h 5min</h2>
-                <p style='color: #4CAF50; font-size: 0.8rem;'>Meta: 30h</p>
+                <div class="metric-title">HORAS NA SEMANA</div>
+                <div class="metric-value">7h 5min</div>
+                <div class="metric-footer">Meta: 30h</div>
             </div>
         """, unsafe_allow_html=True)
 
     with col2:
         st.markdown("""
             <div class="metric-card">
-                <p style='color: gray; margin-bottom: 0;'>QUESTÕES NA SEMANA</p>
-                <h2 style='margin-top: 0;'>162</h2>
-                <p style='color: #4CAF50; font-size: 0.8rem;'>75% de acerto</p>
+                <div class="metric-title">QUESTÕES NA SEMANA</div>
+                <div class="metric-value">162</div>
+                <div class="metric-footer">75% de acerto</div>
             </div>
         """, unsafe_allow_html=True)
 
     with col3:
         st.markdown("""
             <div class="metric-card">
-                <p style='color: gray; margin-bottom: 0;'>ACERTO GERAL</p>
-                <h2 style='margin-top: 0;'>80%</h2>
-                <p style='color: #4CAF50; font-size: 0.8rem;'>1866 questões</p>
+                <div class="metric-title">ACERTO GERAL</div>
+                <div class="metric-value">80%</div>
+                <div class="metric-footer">1866 questões</div>
             </div>
         """, unsafe_allow_html=True)
 
     st.write("---")
 
-    # Barra de Progresso
-    st.write("### Horas de Estudo (Meta semanal)")
-    progresso = 0.24 # 24% conforme imagem
+    st.markdown("### Horas de Estudo (Meta semanal)")
+    progresso = 0.24 
     st.progress(progresso)
-    st.write(f"**{progresso*100:.0f}% concluído** | Faltam 22h 55min")
+    st.markdown(f"**{progresso*100:.0f}% concluído** | <span style='color: #808080;'>Faltam 22h 55min</span>", unsafe_allow_html=True)
     
     st.warning("⚠️ Você está abaixo do ritmo. Intensifique!")
 
-    # Gráfico de exemplo (Horas por dia)
-    st.write("### Horas por Dia")
+    # Gráfico
+    st.markdown("### Horas por Dia")
     dados_grafico = pd.DataFrame({
         'Dia': ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab', 'Dom'],
         'Horas': [1, 2.5, 4, 1.5, 0, 0, 0]
     })
+    # O gráfico do Streamlit segue o tema do sistema, mas as cores das barras podem ser fixadas
     st.bar_chart(data=dados_grafico, x='Dia', y='Horas', color="#4CAF50")
 
-# --- OUTRAS PÁGINAS (Simulação) ---
 elif menu == "Registrar Estudo":
     st.header("📝 Registrar Nova Missão")
-    materia = st.selectbox("Matéria", ["Matemática", "Português", "Direito", "Informática"])
-    tempo = st.number_input("Tempo de estudo (minutos)", min_value=0)
-    questoes = st.number_input("Questões resolvidas", min_value=0)
-    acertos = st.number_input("Acertos", min_value=0)
-    
-    if st.button("Salvar na Missão"):
-        st.success(f"Registro de {materia} salvo com sucesso!")
-
-else:
-    st.write(f"Você selecionou: **{menu}**. Esta página está em desenvolvimento.")
+    # Conteúdo da página de registro...
