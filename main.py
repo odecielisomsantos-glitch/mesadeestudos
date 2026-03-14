@@ -4,7 +4,7 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 
-# 1. CONFIGURAÇÃO E ESTILO (UI/UX)
+# 1. CONFIGURAÇÃO E ESTILO (UI/UX PREMIUM)
 st.set_page_config(page_title="Foco na Missão", layout="wide")
 
 st.markdown("""
@@ -14,165 +14,122 @@ st.markdown("""
     html, body, [class*="css"] {font-family: 'Inter', sans-serif; color: #FFFFFF !important;}
     
     /* Barra Superior */
-    .top-bar {background: #1E2329; padding: 15px; border-radius: 8px; border: 1px solid #4CAF50; margin: -50px 0 30px 0; display: flex; justify-content: space-between;}
+    .top-bar {background: #161A1E; padding: 10px 20px; border-bottom: 1px solid #2B3139; margin: -50px -50px 30px -50px; display: flex; justify-content: space-between; align-items: center;}
     
-    /* Cards Profissionais */
-    .metric-card, .reg-card {
-        background: #1C2127; padding: 20px; border-radius: 12px; 
-        border: 1px solid #2B3139; transition: 0.3s; margin-bottom: 20px;
-    }
-    .metric-card:hover {border-color: #4CAF50; transform: translateY(-3px);}
+    /* Cards do Dashboard */
+    .metric-card {background: #1C2127; padding: 20px; border-radius: 12px; border: 1px solid #2B3139; min-height: 150px;}
+    .label {color: #848E9C !important; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;}
+    .value {font-size: 32px; font-weight: 700; margin: 10px 0; color: #FFFFFF !important;}
+    .sub-label {color: #848E9C !important; font-size: 11px;}
+
+    /* Barra de Progresso e Alerta */
+    .progress-container {background: #1C2127; padding: 20px; border-radius: 12px; border: 1px solid #2B3139; margin-top: 20px;}
+    .alert-box {background: rgba(255, 165, 0, 0.1); border: 1px solid orange; color: orange; padding: 10px; border-radius: 8px; font-size: 13px; margin-top: 15px;}
     
-    /* Textos */
-    .label {color: #A0AEC0 !important; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 10px;}
-    .value {font-size: 28px; font-weight: 700; margin: 5px 0; color: #FFFFFF !important;}
-    .sub {color: #4CAF50 !important; font-size: 12px; font-weight: bold;}
-    
-    /* Customização de Inputs */
-    div[data-baseweb="select"] > div {background-color: #0E1117 !important;}
-    .stButton > button {width: 100%; border-radius: 8px;}
-    .stProgress > div > div > div > div { background-color: #4CAF50 !important; }
+    /* Estilo dos Inputs */
+    .reg-card {background: #1C2127; padding: 25px; border-radius: 12px; border: 1px solid #2B3139; margin-bottom: 20px;}
 </style>
 """, unsafe_allow_html=True)
 
-# 2. BANCO DE DADOS (CSV Permanente)
+# 2. BANCO DE DADOS (Correção do erro de Data)
 DB_FILE = "dados_missao.csv"
-if not os.path.exists(DB_FILE):
-    pd.DataFrame(columns=["data", "materia", "minutos", "questoes", "acertos"]).to_csv(DB_FILE, index=False)
 
-def carregar_dados(): 
-    df = pd.read_csv(DB_FILE)
-    df['data'] = pd.to_datetime(df['data'])
-    return df
+def inicializar_db():
+    if not os.path.exists(DB_FILE):
+        df = pd.DataFrame(columns=["data", "materia", "minutos", "questoes", "acertos"])
+        df.to_csv(DB_FILE, index=False)
 
-def salvar_dados(m, t, q, a, d=None):
+def carregar_dados():
+    inicializar_db()
+    try:
+        df = pd.read_csv(DB_FILE)
+        if not df.empty:
+            df['data'] = pd.to_datetime(df['data'], errors='coerce') # Coerce evita o erro de formato
+            df = df.dropna(subset=['data']) # Remove linhas com data inválida
+        return df
+    except Exception:
+        return pd.DataFrame(columns=["data", "materia", "minutos", "questoes", "acertos"])
+
+def salvar_dados(m, t, q, a, d):
     df = carregar_dados()
-    data_final = d if d else datetime.now().strftime("%Y-%m-%d")
-    novo = pd.DataFrame([[data_final, m, t, q, a]], columns=df.columns)
+    novo = pd.DataFrame([[d, m, t, q, a]], columns=df.columns)
     pd.concat([df, novo]).to_csv(DB_FILE, index=False)
 
 df_estudos = carregar_dados()
 
 # 3. SIDEBAR
 with st.sidebar:
-    st.markdown("<h2 style='color:#4CAF50; text-align:center;'>🎯 FOCO</h2>", unsafe_allow_html=True)
-    menu = option_menu(None, ["Dashboard", "Registrar Estudo", "Cronômetro", "Desempenho"],
-        icons=["grid", "pencil", "clock", "graph-up"],
-        styles={
-            "container": {"background-color": "#0E1117"},
-            "nav-link": {"color": "#FFF", "font-size": "15px"},
-            "nav-link-selected": {"background-color": "#2B3139", "color": "#4CAF50", "border-left": "4px solid #4CAF50"}
-        })
-    st.caption("🟢 Você tem acesso completo!")
+    st.markdown("<h3 style='color:#4CAF50;'>🎯 FOCO NO PAPIRO</h3>", unsafe_allow_html=True)
+    menu = option_menu(None, ["Dashboard", "Registrar Estudo", "Cronômetro", "Desempenho", "Relatórios", "Ranking", "Perfil"],
+        icons=["grid", "pencil", "clock", "graph-up", "file-text", "trophy", "person"],
+        styles={"nav-link": {"color": "#848E9C", "font-size": "14px"}, "nav-link-selected": {"background-color": "#2B3139", "color": "#4CAF50"}})
 
-st.markdown('<div class="top-bar"><span style="color:#4CAF50; font-weight:bold;">FOCO NA MISSÃO</span></div>', unsafe_allow_html=True)
+# BARRA SUPERIOR
+st.markdown(f'''<div class="top-bar">
+    <span style="color:#4CAF50; font-weight:bold;">FOCO NO PAPIRO</span>
+    <div style="font-size:12px; color:#848E9C;">"Quem não mede, não evolui." | <span style="color:#F0B90B">🏆 Premium</span></div>
+</div>''', unsafe_allow_html=True)
 
-# 4. LÓGICA DE FILTRAGEM
-def filtrar(df, p):
-    if df.empty: return df
-    h = datetime.now()
-    if p == "Hoje": return df[df['data'].dt.date == h.date()]
-    if p == "Semana": return df[df['data'] >= (h - timedelta(days=h.weekday()))]
-    if p == "Mês": return df[df['data'].dt.month == h.month]
-    if p == "Ano": return df[df['data'].dt.year == h.year]
-    return df
-
-# 5. PÁGINAS
+# 4. PÁGINAS
 if menu == "Dashboard":
-    st.markdown("### Olá, Guerreiro! 👋")
-    st.caption(datetime.now().strftime("%A, %d de %B de %Y"))
-    
-    if df_estudos.empty:
-        st.info("Nenhum dado encontrado. Comece a registrar seus estudos!")
+    st.markdown("## Olá, Guerreiro! 👋")
+    st.caption(datetime.now().strftime("%A, %d de %B"))
+
+    # Métricas Topo
+    m1, m2, m3, m4 = st.columns(4)
+    if not df_estudos.empty:
+        h_semana = df_estudos[df_estudos['data'] >= (datetime.now() - timedelta(days=7))]['minutos'].sum() / 60
+        q_semana = df_estudos[df_estudos['data'] >= (datetime.now() - timedelta(days=7))]['questoes'].sum()
+        acerto_geral = (df_estudos['acertos'].sum() / df_estudos['questoes'].sum() * 100) if df_estudos['questoes'].sum() > 0 else 0
     else:
-        c1, c2, c3 = st.columns(3)
-        q_tot = df_estudos['questoes'].sum()
-        metrics = [
-            ("Horas na Semana", f"{df_estudos['minutos'].sum()/60:.1f}h", "Meta: 30h"),
-            ("Questões na Semana", q_tot, f"{df_estudos['acertos'].sum()} acertos"),
-            ("Acerto Geral", f"{(df_estudos['acertos'].sum()/q_tot*100) if q_tot>0 else 0:.1f}%", f"{q_tot} questões")
-        ]
-        for col, (t, v, s) in zip([c1, c2, c3], metrics):
-            col.markdown(f'<div class="metric-card"><div class="label">{t}</div><div class="value">{v}</div><div class="sub">{s}</div></div>', unsafe_allow_html=True)
-        
-        st.write("---")
-        st.markdown("### Horas por Dia")
-        df_daily = df_estudos.groupby(df_estudos['data'].dt.date)['minutos'].sum() / 60
-        st.bar_chart(df_daily, color="#4CAF50")
+        h_semana, q_semana, acerto_geral = 0, 0, 0
+
+    m1.markdown(f'<div class="metric-card"><div class="label">Horas na Semana</div><div class="value">{h_semana:.1f}h</div><div class="sub-label">Meta: 30h</div></div>', unsafe_allow_html=True)
+    m2.markdown(f'<div class="metric-card"><div class="label">Questões na Semana</div><div class="value">{int(q_semana)}</div><div class="sub-label">Foco total</div></div>', unsafe_allow_html=True)
+    m3.markdown(f'<div class="metric-card"><div class="label">Acerto Geral</div><div class="value">{acerto_geral:.1f}%</div><div class="sub-label">{int(df_estudos["questoes"].sum() if not df_estudos.empty else 0)} questões</div></div>', unsafe_allow_html=True)
+    m4.markdown(f'<div class="metric-card"><div class="label">Matérias</div><div class="value">{df_estudos["materia"].nunique() if not df_estudos.empty else 0}</div><div class="sub-label">Disciplinas</div></div>', unsafe_allow_html=True)
+
+    # Progresso Semanal (Igual à imagem)
+    st.markdown('<div class="progress-container">', unsafe_allow_html=True)
+    pct = min(h_semana / 30, 1.0)
+    st.markdown(f'<div style="display:flex; justify-content:space-between;"><span class="label">Horas de Estudo (Meta semanal)</span><span class="value" style="font-size:18px;">{h_semana:.1f}h / 30h</span></div>', unsafe_allow_html=True)
+    st.progress(pct)
+    st.markdown(f'<p class="sub-label">{int(pct*100)}% concluído | Faltam {max(30-h_semana, 0):.1f}h</p>', unsafe_allow_html=True)
+    if h_semana < 15:
+        st.markdown('<div class="alert-box">⚠️ Você está abaixo do ritmo. Intensifique!</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 elif menu == "Registrar Estudo":
     st.markdown("## Registrar Estudo")
-    st.caption("Registre cada sessão de estudo para acompanhar sua evolução")
-
-    col_main, col_side = st.columns([2, 1])
-
-    with col_main:
-        # DATA
-        st.markdown('<div class="reg-card">', unsafe_allow_html=True)
-        st.markdown('<div class="label">DATA</div>', unsafe_allow_html=True)
-        c_d1, c_d2 = st.columns([1, 2])
-        btn_hoje = c_d1.button("📅 Hoje")
-        data_input = c_d2.date_input("Selecionar data", label_visibility="collapsed")
-        data_final = datetime.now().date() if btn_hoje else data_input
-        st.markdown(f"Data selecionada: **{data_final.strftime('%A, %d de %m de %Y')}**")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # MATÉRIA
-        st.markdown('<div class="reg-card">', unsafe_allow_html=True)
-        st.markdown('<div class="label">MATÉRIA</div>', unsafe_allow_html=True)
-        materias = ["Português", "Matemática", "Direito Constitucional", "Direito Administrativo", "Raciocínio Lógico", "Informática", "Direito Penal"]
-        m_sel = st.radio("Escolha a matéria", materias, horizontal=True, label_visibility="collapsed")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # DURAÇÃO
-        st.markdown('<div class="reg-card">', unsafe_allow_html=True)
-        st.markdown('<div class="label">DURAÇÃO</div>', unsafe_allow_html=True)
-        ch, cm, cs = st.columns(3)
-        h = ch.number_input("Horas", 0, 24)
-        m = cm.number_input("Minutos", 0, 59)
-        s = cs.number_input("Segundos", 0, 59)
-        total_m = (h * 60) + m + (s / 60)
-        
-        st.write(" ")
-        if st.button("🚀 SALVAR REGISTRO", type="primary"):
-            salvar_dados(m_sel, int(total_m), 0, 0, data_final.strftime("%Y-%m-%d"))
-            st.success("Estudo registrado com sucesso!")
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with col_side:
-        # REGISTROS RECENTES
-        st.markdown('<div class="reg-card" style="min-height:435px;">', unsafe_allow_html=True)
-        st.markdown('<div class="label">Registros Recentes</div>', unsafe_allow_html=True)
-        if df_estudos.empty:
-            st.markdown('<p style="color:#848E9C; font-size:13px;">Nenhum registro ainda.</p>', unsafe_allow_html=True)
-        else:
-            for _, row in df_estudos.tail(5).iloc[::-1].iterrows():
-                st.markdown(f"**{row['materia']}**")
-                st.caption(f"{row['data'].strftime('%d/%m')} • {row['minutos']} min")
-                st.divider()
-        st.markdown('<p style="color:#4CAF50; font-style:italic; font-size:11px;">"Tudo é registrado. Tudo é calculado."</p>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-elif menu == "Desempenho":
-    st.markdown("### 📈 Desempenho")
-    per = st.select_slider("", ["Hoje", "Semana", "Mês", "Ano", "Todo"], "Semana")
-    df_f = filtrar(df_estudos.copy(), per)
+    c_left, c_right = st.columns([2, 1])
     
-    if not df_f.empty:
-        c1, c2, c3, c4 = st.columns(4)
-        h_tot = df_f['minutos'].sum()/60
-        specs = [
-            ("Total Horas", f"{h_tot:.1f}h", f"{df_f['minutos'].sum()}m"), 
-            ("Média Diária", f"{h_tot/df_f['data'].nunique():.1f}h", "Ritmo"), 
-            ("Matérias", df_f['materia'].nunique(), "Disciplinas"), 
-            ("Registros", len(df_f), "Sessões")
-        ]
-        for col, (t, v, s) in zip([c1, c2, c3, c4], specs):
-            col.markdown(f'<div class="metric-card"><div class="label">{t}</div><div class="value">{v}</div><div class="sub">{s}</div></div>', unsafe_allow_html=True)
-        
-        st.markdown("#### Horas por Matéria")
-        df_mat = df_f.groupby('materia')['minutos'].sum() / 60
-        st.bar_chart(df_mat, color="#4CAF50")
-    else:
-        st.warning("Sem dados para este período.")
+    with c_left:
+        with st.form("reg_form", clear_on_submit=True):
+            st.markdown('<div class="label">DATA</div>', unsafe_allow_html=True)
+            d = st.date_input("Data", label_visibility="collapsed")
+            
+            st.markdown('<div class="label">MATÉRIA</div>', unsafe_allow_html=True)
+            mat = st.selectbox("Selecione", ["Português", "Matemática", "Direito Constitucional", "Direito Administrativo"], label_visibility="collapsed")
+            
+            st.markdown('<div class="label">DURAÇÃO E QUESTÕES</div>', unsafe_allow_html=True)
+            col1, col2, col3 = st.columns(3)
+            minutos = col1.number_input("Minutos", min_value=1)
+            quest = col2.number_input("Questões", min_value=0)
+            acer = col3.number_input("Acertos", min_value=0)
+            
+            if st.form_submit_button("🚀 SALVAR REGISTRO"):
+                salvar_dados(mat, minutos, quest, acer, d)
+                st.success("Missão registrada!")
+                st.rerun()
+
+    with c_right:
+        st.markdown('<div class="reg-card">', unsafe_allow_html=True)
+        st.markdown('<div class="label">Registros Recentes</div>', unsafe_allow_html=True)
+        if not df_estudos.empty:
+            for _, row in df_estudos.tail(5).iloc[::-1].iterrows():
+                st.write(f"**{row['materia']}** - {row['minutos']}min")
+                st.caption(f"{row['data'].strftime('%d/%m/%Y')}")
+                st.divider()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# Adicione aqui as outras abas conforme necessário...
