@@ -4,37 +4,35 @@ import pandas as pd
 
 st.set_page_config(page_title="Foco na Missão", layout="wide")
 
-# CSS Minimalista e ajustes de topo
+# CSS Ninja: Ajustando cores para Dark Grey e eliminando fundos brancos
 st.markdown("""<style>
-    [data-testid="stAppViewContainer"], [data-testid="stSidebar"] {background-color: #0E1117 !important;}
-    .top-bar {background-color: #FFFFFF; padding: 10px; border-radius: 5px; margin-bottom: 25px; display: flex; align-items: center;}
-    .top-title {color: #0E1117 !important; font-weight: bold; font-size: 20px; margin-left: 10px;}
+    [data-testid="stAppViewContainer"], [data-testid="stSidebar"], .main {background-color: #0E1117 !important;}
+    /* Barra Superior - Agora em Cinza Escuro */
+    .top-bar {background-color: #1E1E1E; padding: 12px; border-radius: 8px; border: 1px solid #333; margin-bottom: 20px;}
+    .top-title {color: #4CAF50 !important; font-weight: bold; font-size: 20px; margin-left: 10px;}
+    /* Cards e Gráficos */
     .card {background: #1E1E1E; padding: 15px; border-radius: 10px; border-left: 4px solid #4CAF50;}
-    h3, p, span {color: #FFF !important;}
+    h3, p, span, label {color: #FFF !important;}
+    /* Remove bordas brancas de componentes do Streamlit */
+    div[data-testid="stForm"] {border: 1px solid #333;}
 </style>""", unsafe_allow_html=True)
 
-# --- SIDEBAR SEM TÍTULO ---
+# --- SIDEBAR ---
 with st.sidebar:
-    st.write(" ") # Respiro no topo
+    st.write(" ")
     menu = option_menu(
         None, ["Dashboard", "Registrar Estudo", "Cronômetro", "Desempenho", "Relatórios", "Ranking", "Conquistas", "Perfil"],
         icons=["grid-1x2", "pencil-square", "stopwatch", "graph-up-arrow", "file-earmark-text", "trophy", "award", "person"],
         styles={
             "container": {"background-color": "#0E1117"},
-            "nav-link": {"font-size": "15px", "color": "#FFF", "margin":"4px"},
-            "nav-link-selected": {"background-color": "transparent", "color": "#4CAF50", "border-left": "4px solid #4CAF50", "border-radius": "0px"}
+            "nav-link": {"font-size": "15px", "color": "#FFF"},
+            "nav-link-selected": {"background-color": "#1E1E1E", "color": "#4CAF50", "border-left": "4px solid #4CAF50", "border-radius": "0px"}
         }
     )
-    st.markdown("---")
-    st.caption("🟢 Você tem acesso completo!")
+    st.caption("🟢 Acesso Completo")
 
-# --- CABEÇALHO NA PÁGINA PRINCIPAL (BARRA BRANCA) ---
-st.markdown("""
-    <div class="top-bar">
-        <span style="font-size: 24px;">🎯</span>
-        <span class="top-title">FOCO NA MISSÃO</span>
-    </div>
-    """, unsafe_allow_html=True)
+# --- CABEÇALHO ESCURO ---
+st.markdown('<div class="top-bar"><span class="top-title">🎯 FOCO NA MISSÃO</span></div>', unsafe_allow_html=True)
 
 # --- CONTEÚDO ---
 if menu == "Dashboard":
@@ -47,4 +45,14 @@ if menu == "Dashboard":
 
     st.write("---")
     st.progress(0.24)
-    st.bar_chart(pd.DataFrame({'D': ['S','T','Q','Q','S','S','D'], 'H': [1, 2.5, 4, 1.5, 0, 0, 0]}), x='D', y='H', color="#4CAF50")
+    
+    # Gráfico com dados simulados
+    df = pd.DataFrame({'D': ['S','T','Q','Q','S','S','D'], 'H': [1, 2.5, 4, 1.5, 0, 0, 0]})
+    st.bar_chart(df, x='D', y='H', color="#4CAF50")
+
+elif menu == "Registrar Estudo":
+    st.markdown("### 📝 Registrar Missão")
+    with st.form("reg"):
+        st.selectbox("Matéria", ["Matemática", "Português", "Direito"])
+        st.number_input("Questões Feitas", 0)
+        if st.form_submit_button("Salvar"): st.success("Registrado!")
